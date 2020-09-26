@@ -5,12 +5,18 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 
 namespace EventStreamDotNet
 {
-    internal class EventStream<TDomainModelRoot, TDomainEventHandler>
+    /// <summary>
+    /// Handles the domain model state, the event stream delta logging, and snapshot creation.
+    /// </summary>
+    /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
+    /// <typeparam name="TDomainEventHandler">The class which applies domain events to a domain model.</typeparam>
+    internal class EventStreamProcessor<TDomainModelRoot, TDomainEventHandler>
         where TDomainModelRoot : class, IDomainModelRoot, new()
         where TDomainEventHandler : class, IDomainModelEventHandler<TDomainModelRoot>, new()
     {
@@ -28,7 +34,7 @@ namespace EventStreamDotNet
         /// Represents the ETag last read from the snapshot table. Can be used to decide if/when to
         /// output a new snapshot.
         /// </summary>
-        internal long LastKnownShapshotETag;
+        internal long LastKnownShapshotETag = -1;
 
         /// <summary>
         /// Represents the interval since this object instance wrote a new snapshot.
@@ -49,28 +55,43 @@ namespace EventStreamDotNet
         /// Domain model state is kept private to ensure only copies can be retrieved (using method
         /// names that will remind the developer of the client app that they only obtained a copy.)
         /// </summary>
-        private TDomainModelRoot State;
+        private TDomainModelRoot domainModelState;
 
-        // TODO - do we need to keep this around or will ApplyMethods hold the ref alive?
-        private readonly IDomainModelEventHandler<TDomainModelRoot> EventHandler;
+        // TODO - do we need to keep this around or will applyMethods hold the ref alive?
+        private readonly IDomainModelEventHandler<TDomainModelRoot> eventHandler;
 
         /// <summary>
         /// During initializtion all Apply methods in the EventHandler are stored, keyed on the domain event they process.
         /// </summary>
-        private Dictionary<Type, MethodInfo> ApplyMethods;
+        private Dictionary<Type, MethodInfo> applyMethods;
+
+        /// <summary>
+        /// During public/internal processing, a list of event stream and snapshot projection
+        /// handlers are collected. Prior to exit, the handlers are invoked in order, then
+        /// the list is reset.
+        /// </summary>
+        private List<Action> projectionHandlers = new List<Action>();
+
+        /// <summary>
+        /// Ensures Type metadata is stored with the serialized output.
+        /// </summary>
+        private JsonSerializerSettings jsonSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
 
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="id">The unique identifier for this domain model object and event stream.</param>
         /// <param name="config">The configuration for this event stream.</param>
-        internal EventStream(string id, EventStreamDotNetConfig config)
+        internal EventStreamProcessor(string id, EventStreamDotNetConfig config)
         {
             Id = id;
             Config = config;
-            EventHandler = Activator.CreateInstance<TDomainEventHandler>();
+            eventHandler = Activator.CreateInstance<TDomainEventHandler>();
             IsInitialized = false;
         }
+
+
+        // ---------- Internal methods invoked by EventStreamManager
 
         /// <summary>
         /// Reads the snapshot and all newer events. See <see cref="ReadAllEvents"/> for details
@@ -78,14 +99,14 @@ namespace EventStreamDotNet
         /// </summary>
         internal async Task Initialize()
         {
-            ApplyMethods = new Dictionary<Type, MethodInfo>();
-            var methods = EventHandler.GetType().GetMethods();
+            applyMethods = new Dictionary<Type, MethodInfo>();
+            var methods = eventHandler.GetType().GetMethods();
             foreach(var method in methods)
             {
                 if(method.Name == "Apply")
                 {
                     var type = method.GetParameters()[0].ParameterType;
-                    ApplyMethods.Add(type, method);
+                    applyMethods.Add(type, method);
                 }
             }
 
@@ -101,8 +122,8 @@ namespace EventStreamDotNet
         {
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
-            var json = JsonConvert.SerializeObject(State, JsonSettings);
-            return JsonConvert.DeserializeObject<TDomainModelRoot>(json, JsonSettings);
+            var json = JsonConvert.SerializeObject(domainModelState, jsonSettings);
+            return JsonConvert.DeserializeObject<TDomainModelRoot>(json, jsonSettings);
         }
 
         /// <summary>
@@ -114,13 +135,13 @@ namespace EventStreamDotNet
         {
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
+            projectionHandlers.Clear();
+
             using var connection = new SqlConnection(Config.Database.ConnectionString);
             await connection.OpenAsync();
 
             // get the latest snapshot
-            (ETag, State) = await ReadSnapshot(connection);
-            LastKnownShapshotETag = ETag;
-            LastSnapshotDuration.Restart();
+            (ETag, domainModelState) = await ReadSnapshot(connection);
 
             // apply events newer than this object instance's current state
             var oldETag = ETag;
@@ -135,13 +156,16 @@ namespace EventStreamDotNet
 
             await connection.CloseAsync();
 
+            InvokeProjectionHandlers();
+
             // indicate whether a snapshot was updated
             return appliedNewerEvents; 
         }
 
         /// <summary>
         /// If this object instance's ETag is the latest, this stores the sequence of events to the stream table and
-        /// returns true. The method returns false if the current ETag is outdated. Does not update the snapshot.
+        /// returns true. The method returns false if the current ETag is outdated. The snapshot may be updated according
+        /// to the configured policy.
         /// </summary>
         /// <param name="deltas">The list of domain events to store.</param>
         /// <param name="requireCurrentETag">When true, events will only store/apply if the model state is up to date. Some types of events are not sensitive to this
@@ -150,6 +174,8 @@ namespace EventStreamDotNet
         internal async Task<bool> WriteEvents(IReadOnlyList<DomainEventBase> deltas, bool requireCurrentETag)
         {
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
+
+            projectionHandlers.Clear();
 
             using var connection = new SqlConnection(Config.Database.ConnectionString);
             await connection.OpenAsync();
@@ -162,7 +188,7 @@ namespace EventStreamDotNet
             // special case to inititalize the stream
             if(maxETag == 0)
             {
-                await WriteEvent(connection, new StreamInitialized
+                await WriteAndApplyEvent(connection, new StreamInitialized
                 {
                     Id = Id,
                     ETag = 0
@@ -174,12 +200,19 @@ namespace EventStreamDotNet
             foreach(var delta in deltas)
             {
                 ETag++;
-                if(delta.ETag == DomainEventBase.EGAT_NOT_ASSIGNED)
+                if(delta.ETag == DomainEventBase.ETAG_NOT_ASSIGNED)
                 {
                     delta.ETag = ETag;
-                    await WriteEvent(connection, delta);
+                    await WriteAndApplyEvent(connection, delta);
                 }
             }
+
+            if(deltas.Count > 1 && Config.Policies.SnapshotFrequency == SnapshotFrequencyEnum.AfterAllEvents)
+            {
+                await WriteSnapshot();
+            }
+
+            InvokeProjectionHandlers();
 
             return true;
         }
@@ -190,11 +223,18 @@ namespace EventStreamDotNet
         /// </summary>
         internal async Task WriteSnapshot()
         {
+            projectionHandlers.Clear();
+
             using var connection = new SqlConnection(Config.Database.ConnectionString);
             await connection.OpenAsync();
             await WriteSnapshot(connection);
             await connection.CloseAsync();
+
+            InvokeProjectionHandlers();
         }
+
+
+        // ---------- Private intermediate processing used by the internal methods above
 
         /// <summary>
         /// Returns this ID's current snapshot and the snapshot ETag, but does not update the values currently
@@ -217,9 +257,12 @@ namespace EventStreamDotNet
                 await reader.ReadAsync();
                 etag = reader.GetInt64(0);
                 var serializedSnapshot = reader.GetString(1);
-                snapshot = JsonConvert.DeserializeObject<TDomainModelRoot>(serializedSnapshot, JsonSettings);
+                snapshot = JsonConvert.DeserializeObject<TDomainModelRoot>(serializedSnapshot, jsonSettings);
             }
             await reader.CloseAsync();
+
+            LastKnownShapshotETag = etag;
+            if (!LastSnapshotDuration.IsRunning) LastSnapshotDuration.Restart();
 
             return (etag, snapshot);
         }
@@ -230,7 +273,7 @@ namespace EventStreamDotNet
         /// <param name="connection">An open database connection.</param>
         private async Task ApplyNewerEvents(SqlConnection connection)
         {
-            using var cmd = new SqlCommand($"SELECT [ETag], [Payload] FROM [{Config.Database.LogTableName}] WHERE Id =@Id AND ETag > @ETag ORDER BY ETag ASC;");
+            using var cmd = new SqlCommand($"SELECT [ETag], [Payload] FROM [{Config.Database.EventTableName}] WHERE Id =@Id AND ETag > @ETag ORDER BY ETag ASC;");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             cmd.Parameters.AddWithValue("@ETag", ETag);
@@ -242,30 +285,11 @@ namespace EventStreamDotNet
                 {
                     ETag = reader.GetInt64(0);
                     var serializedDelta = reader.GetString(1);
-                    var domainEvent = JsonConvert.DeserializeObject(serializedDelta, JsonSettings) as DomainEventBase;
-                    ApplyMethods[domainEvent.GetType()].Invoke(State, new[] { domainEvent });
+                    var domainEvent = JsonConvert.DeserializeObject(serializedDelta, jsonSettings) as DomainEventBase;
+                    ApplyEvent(domainEvent);
                 }
             }
             await reader.CloseAsync();
-        }
-
-        /// <summary>
-        /// Updates this event stream's snapshot record with a new serialized model state.
-        /// </summary>
-        /// <param name="connection">An open database connection.</param>
-        private async Task WriteSnapshot(SqlConnection connection)
-        {
-            var serializedState = JsonConvert.SerializeObject(State, JsonSettings);
-
-            using var cmd = new SqlCommand();
-            cmd.Connection = connection;
-            cmd.CommandText = (ETag == 0)
-                ? $"INSERT INTO [{Config.Database.SnapshotTableName}] ([Id], [ETag], [Snapshot]) VALUES (@Id, @ETag, @Snapshot);"
-                : $"UPDATE [{Config.Database.SnapshotTableName}] SET [ETag]=@ETag, [Snapshot]=@Snapshot WHERE [Id]=@Id;";
-            cmd.Parameters.AddWithValue("@Id", Id);
-            cmd.Parameters.AddWithValue("@ETag", ETag);
-            cmd.Parameters.AddWithValue("@Snapshot", serializedState);
-            await cmd.ExecuteNonQueryAsync();
         }
 
         /// <summary>
@@ -276,7 +300,7 @@ namespace EventStreamDotNet
         {
             // The MAX aggregate returns NULL for no rows, allowing ISNULL to substitute the
             // value 0, otherwise ExecuteScalarAsync would return null for an empty recordset
-            using var cmd = new SqlCommand($"SELECT TOP 1 ISNULL(MAX([ETag]), 0) AS ETag FROM [{Config.Database.LogTableName}] WHERE [Id]=@Id ORDER BY [ETag] DESC;");
+            using var cmd = new SqlCommand($"SELECT TOP 1 ISNULL(MAX([ETag]), 0) AS ETag FROM [{Config.Database.EventTableName}] WHERE [Id]=@Id ORDER BY [ETag] DESC;");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             var etag = (long)await cmd.ExecuteScalarAsync();
@@ -284,14 +308,46 @@ namespace EventStreamDotNet
         }
 
         /// <summary>
-        /// Writes a single domain event to the stream. Does not update the snapshot.
+        /// If a domain event projection handler was defined for this event and the handler
+        /// isn't already queued for invocation, add it.
         /// </summary>
-        /// <param name="connection">An open database connection.</param>
-        /// <param name="delta">The domain event to store.</param>
-        private async Task WriteEvent(SqlConnection connection, DomainEventBase delta)
+        /// <param name="appliedEvent">The domain event that has been applied to the domain model state.</param>
+        private void TryAddDomainEventProjectionHandlers(DomainEventBase appliedEvent)
         {
-            var serializedDelta = JsonConvert.SerializeObject(delta, JsonSettings);
-            using var cmd = new SqlCommand($"INSERT INTO [{Config.Database.LogTableName}] ([Id], [ETag], [Timestamp], [EventType], [Payload]) VALUES (@Id, @ETag, @Timestamp, @TypeName, @Payload);");
+            var type = appliedEvent.GetType();
+            var list = Config.ProjectionHandlers.DomainEventHandlers.Where(h => h.type.Equals(type)).ToList();
+            foreach (var item in list)
+            {
+                if (!projectionHandlers.Contains(item.handler))
+                    projectionHandlers.Add(item.handler);
+            }
+        }
+
+        /// <summary>
+        /// If snapshot projection handlers exist, add any to the queue for invocation which
+        /// haven't already been enqueued.
+        /// </summary>
+        private void TryAddSnapshotProjectionHandlers()
+        {
+            foreach (var handler in Config.ProjectionHandlers.SnapshotHandlers)
+            {
+                if (!projectionHandlers.Contains(handler))
+                    projectionHandlers.Add(handler);
+            }
+        }
+
+
+        // ---------- The lowest level methods which directly mutate model and stream state
+
+        /// <summary>
+        /// Writes a single domain event to the stream and apply it to this object instance's copy
+        /// of the domain model state. The snapshot may be updated according to the configured policy.
+        /// <param name="connection">An open database connection.</param>
+        /// <param name="delta">The domain event to store and apply.</param>
+        private async Task WriteAndApplyEvent(SqlConnection connection, DomainEventBase delta)
+        {
+            var serializedDelta = JsonConvert.SerializeObject(delta, jsonSettings);
+            using var cmd = new SqlCommand($"INSERT INTO [{Config.Database.EventTableName}] ([Id], [ETag], [Timestamp], [EventType], [Payload]) VALUES (@Id, @ETag, @Timestamp, @TypeName, @Payload);");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             cmd.Parameters.AddWithValue("@ETag", delta.ETag);
@@ -299,12 +355,83 @@ namespace EventStreamDotNet
             cmd.Parameters.AddWithValue("@TypeName", delta.GetType().Name);
             cmd.Parameters.AddWithValue("@Payload", serializedDelta);
             await cmd.ExecuteNonQueryAsync();
+
+            // now that the event is part of the stream (eg. a logged, historical fact), apply it to our copy of the model
+            ApplyEvent(delta);
+
+            // process individual event-level snapshot policies
+            switch (Config.Policies.SnapshotFrequency)
+            {
+                case SnapshotFrequencyEnum.AfterEachEvent:
+                    {
+                        await WriteSnapshot(connection);
+                        break;
+                    }
+
+                case SnapshotFrequencyEnum.AfterIntervalDeltas:
+                    {
+                        if (ETag - LastKnownShapshotETag >= Config.Policies.SnapshotInterval)
+                        {
+                            await WriteSnapshot(connection);
+                        }
+                        break;
+                    }
+
+                case SnapshotFrequencyEnum.AfterIntervalSeconds:
+                    {
+                        if (LastSnapshotDuration.ElapsedMilliseconds / 1000 >= Config.Policies.SnapshotInterval)
+                        {
+                            await WriteSnapshot(connection);
+                        }
+                        break;
+                    }
+            }
         }
 
-        internal JsonSerializerSettings JsonSettings
-            = new JsonSerializerSettings()
-            {
-                TypeNameHandling = TypeNameHandling.All
-            };
+        /// <summary>
+        /// Applies a logged domain event to the current model state.
+        /// </summary>
+        /// <param name="loggedEvent">The domain event to apply.</param>
+        private void ApplyEvent(DomainEventBase loggedEvent)
+        {
+            applyMethods[loggedEvent.GetType()].Invoke(domainModelState, new[] { loggedEvent });
+            TryAddDomainEventProjectionHandlers(loggedEvent);
+        }
+
+        /// <summary>
+        /// Updates this event stream's snapshot record with a new serialized model state.
+        /// </summary>
+        /// <param name="connection">An open database connection.</param>
+        private async Task WriteSnapshot(SqlConnection connection)
+        {
+            var serializedState = JsonConvert.SerializeObject(domainModelState, jsonSettings);
+
+            using var cmd = new SqlCommand();
+            cmd.Connection = connection;
+            cmd.CommandText = (ETag == 0)
+                ? $"INSERT INTO [{Config.Database.SnapshotTableName}] ([Id], [ETag], [Snapshot]) VALUES (@Id, @ETag, @Snapshot);"
+                : $"UPDATE [{Config.Database.SnapshotTableName}] SET [ETag]=@ETag, [Snapshot]=@Snapshot WHERE [Id]=@Id;";
+            cmd.Parameters.AddWithValue("@Id", Id);
+            cmd.Parameters.AddWithValue("@ETag", ETag);
+            cmd.Parameters.AddWithValue("@Snapshot", serializedState);
+            await cmd.ExecuteNonQueryAsync();
+
+            LastKnownShapshotETag = ETag;
+            LastSnapshotDuration.Restart();
+
+            TryAddSnapshotProjectionHandlers();
+        }
+
+        /// <summary>
+        /// If any domain event or snapshot handlers were enqueued, invoke them now then clear
+        /// the queue.
+        /// </summary>
+        private void InvokeProjectionHandlers()
+        {
+            foreach (var handler in projectionHandlers)
+                handler.Invoke();
+
+            projectionHandlers.Clear();
+        }
     }
 }

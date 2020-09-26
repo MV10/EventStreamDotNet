@@ -10,7 +10,7 @@ namespace Demo
 
             AppConfig.LoadConfiguration();
             Console.WriteLine($"Database: {AppConfig.Get.EventStreamDotNet.Database.ConnectionString}");
-            Console.WriteLine($"Log Table: {AppConfig.Get.EventStreamDotNet.Database.LogTableName}");
+            Console.WriteLine($"Log Table: {AppConfig.Get.EventStreamDotNet.Database.EventTableName}");
             Console.WriteLine($"Snapshot Table: {AppConfig.Get.EventStreamDotNet.Database.SnapshotTableName}");
 
         }

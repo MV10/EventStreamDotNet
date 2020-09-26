@@ -1,6 +1,9 @@
 ﻿
 namespace EventStreamDotNet
 {
+    /// <summary>
+    /// Defines how the library updates the domain model snapshot stored in the database.
+    /// </summary>
     public enum SnapshotFrequencyEnum
     {
         /// <summary>
@@ -22,36 +25,16 @@ namespace EventStreamDotNet
         AfterEachEvent = 2,
 
         /// <summary>
-        /// The snapshot is updated after <em>at least</em> ten events are posted. If a batch of
-        /// events are posted, all events will be stored before the snapshot is updated.
+        /// The SnapshotInterval configuration value indicates the number of deltas after which
+        /// a new snapshot is generated.
         /// </summary>
-        Countdown10Events = 3,
+        AfterIntervalDeltas = 3,
 
         /// <summary>
-        /// The snapshot is updated after <em>at least</em> one hundred events are posted. If a batch of
-        /// events are posted, all events will be stored before the snapshot is updated.
+        /// The SnapshotInterval configuration value indicates the number of seconds after which
+        /// a new snapshot is generated. There is no automated timer, an additional delta must be
+        /// written before an expired duration will be recognized.
         /// </summary>
-        Countdown100Events = 4,
-
-        /// <summary>
-        /// The snapshot is updated after <em>at least</em> one second has passed since the last snapshot.
-        /// The snapshot will not update automatically, after the duration expires, posting a new event will
-        /// trigger the snapshot update.
-        /// </summary>
-        Duration1Second = 5,
-
-        /// <summary>
-        /// The snapshot is updated after <em>at least</em> ten seconds have passed since the last snapshot.
-        /// The snapshot will not update automatically, after the duration expires, posting a new event will
-        /// trigger the snapshot update.
-        /// </summary>
-        Duration10Seconds = 6,
-
-        /// <summary>
-        /// The snapshot is updated after <em>at least</em> one minute has passed since the last snapshot.
-        /// The snapshot will not update automatically, after the duration expires, posting a new event will
-        /// trigger the snapshot update.
-        /// </summary>
-        Duration1Minute = 7
+        AfterIntervalSeconds = 4,
     }
 }

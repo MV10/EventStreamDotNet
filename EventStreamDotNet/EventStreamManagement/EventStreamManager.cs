@@ -2,14 +2,12 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Reflection;
 using System.Threading.Tasks;
 
 namespace EventStreamDotNet
 {
     /// <summary>
-    /// An instance of an event stream manager.
+    /// The public interface which client applications use to interact with an event stream and the domain model state.
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     /// <typeparam name="TDomainEventHandler">The class which applies domain events to a domain model.</typeparam>
@@ -20,7 +18,7 @@ namespace EventStreamDotNet
         /// <summary>
         /// Internal handling of domain model state and related event stream database operations.
         /// </summary>
-        private readonly EventStream<TDomainModelRoot, TDomainEventHandler> eventStream;
+        private readonly EventStreamProcessor<TDomainModelRoot, TDomainEventHandler> eventStream;
 
         /// <summary>
         /// Allows the one-event PostDomainEvent call to quickly hand-off to the list-based PostDomainEvents.
@@ -34,7 +32,7 @@ namespace EventStreamDotNet
         /// <param name="config">The configuration for this event stream.</param>
         public EventStreamManager(string id, EventStreamDotNetConfig config)
         {
-            eventStream = new EventStream<TDomainModelRoot, TDomainEventHandler>(id, config);
+            eventStream = new EventStreamProcessor<TDomainModelRoot, TDomainEventHandler>(id, config);
         }
 
         /// <inheritdoc />
@@ -71,8 +69,6 @@ namespace EventStreamDotNet
 
             var success = await eventStream.WriteEvents(deltas, onlyWhenCurrent);
             var state = doNotCopyState ? null : eventStream.CopyState();
-
-            // TODO manage snapshot creation, invoke projection handlers
 
             return (success, state);
         }
