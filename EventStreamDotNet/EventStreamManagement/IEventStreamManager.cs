@@ -9,7 +9,7 @@ namespace EventStreamDotNet
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     public interface IEventStreamManager<TDomainModelRoot>
-        where TDomainModelRoot : class, IDomainModelRoot
+        where TDomainModelRoot : class, IDomainModelRoot, new()
     {
         /// <summary>
         /// The unique identifier for this domain model instance.
@@ -21,7 +21,7 @@ namespace EventStreamDotNet
         /// an exception is thrown. This gives the manager a chance to load the current snapshot and apply any new
         /// changes so that the initial model state is valid.
         /// </summary>
-        void Initialize();
+        Task Initialize();
 
         /// <summary>
         /// A copy of the domain model's state based on the last time this manager read or updated the stream. The
@@ -38,7 +38,9 @@ namespace EventStreamDotNet
         /// <param name="onlyWhenCurrent">When true, the event will only apply if the model state is up to date. Some types of events are not sensitive to this
         /// (such as posting a deposit to an account), while others are (such as posting a withdrawl, which may cause an overdraft if approved against a stale
         /// model state). Defaults to false.</param>
-        Task<(bool Success, TDomainModelRoot CurrentState)> PostDomainEvent(DomainEventBase delta, bool onlyWhenCurrent = false);
+        /// <param name="doNotCopyState">If true, return value CopyOfCurrentState will be null. Useful for high-throughput scenarios where client app will
+        /// retrieve state separately at a later time. Default is false.</param>
+        Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false);
 
         /// <summary>
         /// Adds multiple new domainevents to the stream. The manager's domain model state will be updated upon successfully writing the events, and the defined
@@ -49,6 +51,6 @@ namespace EventStreamDotNet
         /// (such as posting a deposit to an account), while others are (such as posting a withdrawl, which may cause an overdraft if approved against a stale
         /// model state). Defaults to false.</param>
         /// </summary>
-        Task<(bool Success, TDomainModelRoot CurrentState)> PostDomainEvents(IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false);
+        Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false);
     }
 }
