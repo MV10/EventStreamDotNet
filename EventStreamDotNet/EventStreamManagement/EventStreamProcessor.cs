@@ -15,10 +15,8 @@ namespace EventStreamDotNet
     /// Handles the domain model state, the event stream delta logging, and snapshot creation.
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
-    /// <typeparam name="TDomainEventHandler">The class which applies domain events to a domain model.</typeparam>
-    internal class EventStreamProcessor<TDomainModelRoot, TDomainEventHandler>
-        where TDomainModelRoot : class, IDomainModelRoot, new()
-        where TDomainEventHandler : class, IDomainModelEventHandler<TDomainModelRoot>, new()
+    internal class EventStreamProcessor<TDomainModelRoot>
+        where TDomainModelRoot : class, IDomainModelRoot<TDomainModelRoot>, new()
     {
         /// <summary>
         /// The unique ID assigned to this event stream.
@@ -57,7 +55,9 @@ namespace EventStreamDotNet
         /// </summary>
         private TDomainModelRoot domainModelState;
 
-        // TODO - do we need to keep this around or will applyMethods hold the ref alive?
+        /// <summary>
+        /// Hosts the domain model event Apply methods
+        /// </summary>
         private readonly IDomainModelEventHandler<TDomainModelRoot> eventHandler;
 
         /// <summary>
@@ -82,11 +82,12 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="id">The unique identifier for this domain model object and event stream.</param>
         /// <param name="config">The configuration for this event stream.</param>
-        internal EventStreamProcessor(string id, EventStreamDotNetConfig config)
+        /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
+        public EventStreamProcessor(string id, EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
         {
             Id = id;
             Config = config;
-            eventHandler = Activator.CreateInstance<TDomainEventHandler>();
+            this.eventHandler = eventHandler;
             IsInitialized = false;
         }
 
@@ -394,8 +395,10 @@ namespace EventStreamDotNet
         /// <param name="loggedEvent">The domain event to apply.</param>
         private void ApplyEvent(DomainEventBase loggedEvent)
         {
+            eventHandler.DomainModelState = domainModelState;
             applyMethods[loggedEvent.GetType()].Invoke(domainModelState, new[] { loggedEvent });
             TryAddDomainEventProjectionHandlers(loggedEvent);
+            eventHandler.DomainModelState = null;
         }
 
         /// <summary>

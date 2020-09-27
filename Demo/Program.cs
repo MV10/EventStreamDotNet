@@ -1,4 +1,5 @@
-﻿using System;
+﻿using EventStreamDotNet;
+using System;
 
 namespace Demo
 {
@@ -12,6 +13,9 @@ namespace Demo
             Console.WriteLine($"Database: {AppConfig.Get.EventStreamDotNet.Database.ConnectionString}");
             Console.WriteLine($"Log Table: {AppConfig.Get.EventStreamDotNet.Database.EventTableName}");
             Console.WriteLine($"Snapshot Table: {AppConfig.Get.EventStreamDotNet.Database.SnapshotTableName}");
+
+            var customers = new EventStreamCollection<Customer>(AppConfig.Get.EventStreamDotNet, new CustomerEventHandler());
+
 
         }
     }

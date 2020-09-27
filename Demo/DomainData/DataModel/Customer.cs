@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Demo
 {
-    public class Customer : IDomainModelRoot
+    public class Customer : IDomainModelRoot<Customer>
     {
         public string Id { get; set; }
 

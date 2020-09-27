@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 namespace EventStreamDotNet
 {
     /// <summary>
-    /// Defines an EventStreamManager. Useful for clients based upon constructor/interface dependency injection.
+    /// Defines an EventStreamManager. Useful for clients based upon interface-based dependency injection.
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     public interface IEventStreamManager<TDomainModelRoot>
-        where TDomainModelRoot : class, IDomainModelRoot, new()
+        where TDomainModelRoot : class, new()
     {
         /// <summary>
         /// The unique identifier for this domain model instance.
@@ -29,7 +29,7 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="forceRefresh">When true, the manager will check the database and apply any newer events to the model state. Defaults to false.</param>
         Task<TDomainModelRoot> GetCopyOfState(bool forceRefresh = false);
-        
+
         /// <summary>
         /// Adds a single new domain event to the stream. The manager's domain model state will be updated upon successfully writing the event, and the defined
         /// snapshot policy and any projection handlers will be invoked.

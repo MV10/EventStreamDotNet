@@ -1,5 +1,5 @@
 ﻿
-using EventStreamDotNet.Configuration;
+using EventStreamDotNet;
 
 namespace EventStreamDotNet
 {
