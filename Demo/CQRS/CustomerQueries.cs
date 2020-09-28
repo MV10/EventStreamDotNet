@@ -4,15 +4,20 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+// There is nothing special about the query portion of a CQRS service. They're
+// just routine database reads -- typically against either the domain model
+// snapshot or other projection tables. The principle of "eventual consistency"
+// usually applies here -- the data may be stale, and it may change later on.
+
 namespace Demo
 {
     public class CustomerQueries
     {
-        private readonly DatabaseConfig eventStreamDatabaseConfig;
+        private readonly DatabaseConfig dbConfig;
 
-        public CustomerQueries(DatabaseConfig eventStreamDatabaseConfig)
+        public CustomerQueries()
         {
-            this.eventStreamDatabaseConfig = eventStreamDatabaseConfig;
+            this.dbConfig = AppConfig.Get.EventStreamDotNet.Database;
         }
 
         public async Task<APIResult<Customer>> FindCustomer(string id)

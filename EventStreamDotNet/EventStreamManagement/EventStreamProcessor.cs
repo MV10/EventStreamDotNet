@@ -17,7 +17,7 @@ namespace EventStreamDotNet
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     internal class EventStreamProcessor<TDomainModelRoot>
-        where TDomainModelRoot : class, IDomainModelRoot<TDomainModelRoot>, new()
+        where TDomainModelRoot : class, IDomainModelRoot, new()
     {
         /// <summary>
         /// The unique ID assigned to this event stream.
@@ -71,7 +71,7 @@ namespace EventStreamDotNet
         /// handlers are collected. Prior to exit, the handlers are invoked in order, then
         /// the list is reset.
         /// </summary>
-        private List<Action> projectionHandlers = new List<Action>();
+        private List<Action<IDomainModelRoot>> projectionHandlers = new List<Action<IDomainModelRoot>>();
 
         /// <summary>
         /// Ensures Type metadata is stored with the serialized output.
@@ -94,7 +94,7 @@ namespace EventStreamDotNet
             IsInitialized = false;
 
             logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(config.LoggerFactory);
-            logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
+            logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}, ID {id}");
         }
 
 
@@ -106,7 +106,7 @@ namespace EventStreamDotNet
         /// </summary>
         internal async Task Initialize()
         {
-            logger.LogDebug($"{nameof(Initialize)}");
+            logger.LogDebug($"{nameof(Initialize)} ID {Id}");
 
             applyMethods = new Dictionary<Type, MethodInfo>();
             var methods = eventHandler.GetType().GetMethods();
@@ -116,6 +116,7 @@ namespace EventStreamDotNet
                 {
                     var type = method.GetParameters()[0].ParameterType;
                     applyMethods.Add(type, method);
+                    logger.LogDebug($"  Caching Apply method for domain event {type.Name}");
                 }
             }
 
@@ -129,6 +130,8 @@ namespace EventStreamDotNet
         /// </summary>
         internal TDomainModelRoot CopyState()
         {
+            logger.LogDebug($"{nameof(CopyState)} ID {Id}");
+
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
             var json = JsonConvert.SerializeObject(domainModelState, jsonSettings);
@@ -142,6 +145,8 @@ namespace EventStreamDotNet
         /// </summary>
         internal async Task<bool> ReadAllEvents()
         {
+            logger.LogDebug($"{nameof(ReadAllEvents)} ID {Id}");
+
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
             projectionHandlers.Clear();
@@ -182,6 +187,8 @@ namespace EventStreamDotNet
         /// model state).</param>
         internal async Task<bool> WriteEvents(IReadOnlyList<DomainEventBase> deltas, bool requireCurrentETag)
         {
+            logger.LogDebug($"{nameof(WriteEvents)} ID {Id}");
+
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
             projectionHandlers.Clear();
@@ -232,6 +239,8 @@ namespace EventStreamDotNet
         /// </summary>
         internal async Task WriteSnapshot()
         {
+            logger.LogDebug($"{nameof(WriteSnapshot)} ID {Id}");
+
             projectionHandlers.Clear();
 
             using var connection = new SqlConnection(Config.Database.ConnectionString);
@@ -252,9 +261,8 @@ namespace EventStreamDotNet
         /// <param name="connection">An open database connection.</param>
         private async Task<(long ETag, TDomainModelRoot Snapshot)> ReadSnapshot(SqlConnection connection)
         {
-            long etag = 0;
-            var snapshot = Activator.CreateInstance<TDomainModelRoot>();
-            snapshot.Id = Id;
+            long etag;
+            TDomainModelRoot snapshot;
 
             using var cmd = new SqlCommand($"SELECT [ETag], [Snapshot] FROM [{Config.Database.SnapshotTableName}] WHERE Id=@Id");
             cmd.Connection = connection;
@@ -267,6 +275,16 @@ namespace EventStreamDotNet
                 etag = reader.GetInt64(0);
                 var serializedSnapshot = reader.GetString(1);
                 snapshot = JsonConvert.DeserializeObject<TDomainModelRoot>(serializedSnapshot, jsonSettings);
+
+                logger.LogDebug($"{nameof(ReadSnapshot)} ID {Id} loaded ETag {etag}");
+            }
+            else
+            {
+                etag = 0;
+                snapshot = Activator.CreateInstance<TDomainModelRoot>();
+                snapshot.Id = Id;
+
+                logger.LogDebug($"{nameof(ReadSnapshot)} ID {Id} not found, created ETag 0");
             }
             await reader.CloseAsync();
 
@@ -282,6 +300,8 @@ namespace EventStreamDotNet
         /// <param name="connection">An open database connection.</param>
         private async Task ApplyNewerEvents(SqlConnection connection)
         {
+            logger.LogDebug($"{nameof(ApplyNewerEvents)} ID {Id}");
+
             using var cmd = new SqlCommand($"SELECT [ETag], [Payload] FROM [{Config.Database.EventTableName}] WHERE Id =@Id AND ETag > @ETag ORDER BY ETag ASC;");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
@@ -313,6 +333,9 @@ namespace EventStreamDotNet
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             var etag = (long)await cmd.ExecuteScalarAsync();
+
+            logger.LogDebug($"{nameof(ReadNewestETag)} ID {Id} returning ETag {etag}");
+
             return etag;
         }
 
@@ -356,12 +379,16 @@ namespace EventStreamDotNet
         private async Task WriteAndApplyEvent(SqlConnection connection, DomainEventBase delta)
         {
             var serializedDelta = JsonConvert.SerializeObject(delta, jsonSettings);
+            var eventName = delta.GetType().Name;
+
+            logger.LogDebug($"{nameof(WriteAndApplyEvent)} ID {Id} for domain event {eventName}");
+
             using var cmd = new SqlCommand($"INSERT INTO [{Config.Database.EventTableName}] ([Id], [ETag], [Timestamp], [EventType], [Payload]) VALUES (@Id, @ETag, @Timestamp, @TypeName, @Payload);");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             cmd.Parameters.AddWithValue("@ETag", delta.ETag);
             cmd.Parameters.AddWithValue("@Timestamp", delta.Timestamp.ToString("o"));
-            cmd.Parameters.AddWithValue("@TypeName", delta.GetType().Name);
+            cmd.Parameters.AddWithValue("@TypeName", eventName);
             cmd.Parameters.AddWithValue("@Payload", serializedDelta);
             await cmd.ExecuteNonQueryAsync();
 
@@ -415,6 +442,8 @@ namespace EventStreamDotNet
         /// <param name="connection">An open database connection.</param>
         private async Task WriteSnapshot(SqlConnection connection)
         {
+            logger.LogDebug($"{nameof(WriteSnapshot)} ID {Id}");
+
             var serializedState = JsonConvert.SerializeObject(domainModelState, jsonSettings);
 
             using var cmd = new SqlCommand();
@@ -439,8 +468,12 @@ namespace EventStreamDotNet
         /// </summary>
         private void InvokeProjectionHandlers()
         {
+            logger.LogDebug($"{nameof(InvokeProjectionHandlers)} ID {Id}");
+
+            var state = CopyState();
+
             foreach (var handler in projectionHandlers)
-                handler.Invoke();
+                handler.Invoke(state);
 
             projectionHandlers.Clear();
         }

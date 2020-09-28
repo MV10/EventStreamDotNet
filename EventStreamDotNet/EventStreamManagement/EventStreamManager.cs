@@ -11,7 +11,7 @@ namespace EventStreamDotNet
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     public class EventStreamManager<TDomainModelRoot> : IEventStreamManager<TDomainModelRoot>
-        where TDomainModelRoot : class, IDomainModelRoot<TDomainModelRoot>, new()
+        where TDomainModelRoot : class, IDomainModelRoot, new()
     {
         /// <summary>
         /// Internal handling of domain model state and related event stream database operations.

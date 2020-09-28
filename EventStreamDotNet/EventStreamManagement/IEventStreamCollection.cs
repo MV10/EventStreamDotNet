@@ -10,7 +10,7 @@ namespace EventStreamDotNet
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     public interface IEventStreamCollection<TDomainModelRoot>
-        where TDomainModelRoot : class, IDomainModelRoot<TDomainModelRoot>, new()
+        where TDomainModelRoot : class, IDomainModelRoot, new()
     {
         /// <summary>
         /// Defines the maximum number of EventStreamManagers that may be enqueued in the collection.

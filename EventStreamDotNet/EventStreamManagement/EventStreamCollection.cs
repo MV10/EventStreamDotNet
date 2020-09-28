@@ -13,7 +13,7 @@ namespace EventStreamDotNet
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     public class EventStreamCollection<TDomainModelRoot> : IEventStreamCollection<TDomainModelRoot>
-        where TDomainModelRoot : class, IDomainModelRoot<TDomainModelRoot>, new()
+        where TDomainModelRoot : class, IDomainModelRoot, new()
     {
         private readonly IDomainModelEventHandler<TDomainModelRoot> eventHandler;
         private readonly EventStreamDotNetConfig config;
@@ -55,6 +55,8 @@ namespace EventStreamDotNet
         /// <inheritdoc />
         public async Task<IEventStreamManager<TDomainModelRoot>> GetEventStreamManager(string id) 
         {
+            logger.LogDebug($"{nameof(GetEventStreamManager)}({id})");
+
             if (managers.ContainsKey(id)) return managers[id];
 
             var mgr = Activator.CreateInstance(typeof(IEventStreamManager<TDomainModelRoot>), id, config, eventHandler) as IEventStreamManager<TDomainModelRoot>;
@@ -102,6 +104,8 @@ namespace EventStreamDotNet
         /// </summary>
         private void AddManager(IEventStreamManager<TDomainModelRoot> manager)
         {
+            logger.LogDebug($"{nameof(AddManager)} adding manager for event stream {manager.Id}");
+
             managers.Add(manager.Id, manager);
             fifoQueue.Add(manager.Id);
             TrimQueue();
@@ -116,6 +120,8 @@ namespace EventStreamDotNet
 
             if (queueSize < 0)
                 throw new ArgumentException("EventStreamCollection queue size must be 0 or larger");
+
+            logger.LogDebug($"{nameof(TrimQueue)}");
 
             while(fifoQueue.Count > 0 && managers.Count > queueSize)
             {
