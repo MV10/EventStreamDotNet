@@ -57,9 +57,9 @@ namespace Demo
                 // production app would not start a CQRS query service with the EventStreamDotNet configuration,
                 // however (it does not, for example, specify projection table names, which might even be stored
                 // into a completely separate database for performance reasons).
-                var customers = new EventStreamCollection<Customer>(AppConfig.Get.EventStreamDotNet, new CustomerEventHandler());
-                var commands = new CustomerCommands(customers);
-                var queries = new CustomerQueries();
+                var customerManagers = new EventStreamCollection<Customer>(AppConfig.Get.EventStreamDotNet, new CustomerEventHandler());
+                var customerQueries = new CustomerQueries(customerManagers);
+                var customerCommands = new CustomerCommands(customerManagers, customerQueries);
 
                 // See comments in the CustomerProjections class for more implementation tips and considerations.
                 var projections = new CustomerProjections();
@@ -71,7 +71,7 @@ namespace Demo
                 var customerId = "12345678";
 
                 // This is a simple select against the event stream to check whether the ID has ever been used.
-                var customerExists = await queries.CustomerExists(customerId);
+                var customerExists = await customerQueries.CustomerExists(customerId);
                 Console.WriteLine($"Customer id {customerId} exists? {customerExists.Output}");
 
                 // When queries and commands succeed, the response is usually an updated snapshot of the dmain data.
@@ -100,14 +100,14 @@ namespace Demo
                     };
 
                     Console.WriteLine("Creating new customer.");
-                    result = await commands.NewCustomer(customerId, person, residence);
+                    result = await customerCommands.NewCustomer(customerId, person, residence);
                     if (!result.Success)
                         throw new Exception("Failed to create new customer");
                 }
                 else
                 {
                     Console.WriteLine("Retrieving customer.");
-                    result = await queries.FindCustomer(customerId);
+                    result = await customerQueries.FindCustomer(customerId);
                     if (!result.Success)
                         throw new Exception("Failed to retrieve customer snapshot");
                 }
@@ -127,14 +127,14 @@ namespace Demo
                     };
 
                     Console.WriteLine("Adding spouse (yay).");
-                    result = await commands.UpdateSpouse(customerId, spouse);
+                    result = await customerCommands.UpdateSpouse(customerId, spouse);
                     if (!result.Success)
                         throw new Exception("Failed to add spouse");
                 }
                 else
                 {
                     Console.WriteLine("Removing spouse (boo).");
-                    result = await commands.UpdateSpouse(customerId, null);
+                    result = await customerCommands.UpdateSpouse(customerId, null);
                     if (!result.Success)
                         throw new Exception("Failed to remove spouse");
                 }

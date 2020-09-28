@@ -19,6 +19,13 @@ namespace Demo
             Success = false;
         }
 
+        public APIResult(bool success, T successfulOutput, string unsuccessfulMessage)
+        {
+            Success = success;
+            if (success) Output = successfulOutput;
+            if (!success) Message = unsuccessfulMessage;
+        }
+
         public APIResult(Exception ex)
         {
             var message = ex.Message;

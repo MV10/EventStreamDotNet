@@ -61,14 +61,14 @@ namespace Demo
         {
             using var connection = new SqlConnection(dbConfig.ConnectionString);
 
-            using var query = new SqlCommand($"SELECT COUNT(*) FROM [{table}] WHERE [Id]='{id}';");
+            using var query = new SqlCommand($"SELECT COUNT(*) AS [ScalarVal] FROM [{table}] WHERE [Id]='{id}';", connection);
             int count = (int) await query.ExecuteScalarAsync();
 
             var sql = (count == 0) 
                 ? $"INSERT INTO [{table}] ([Id],[{col}]) VALUES ('{id}','{value}');"
                 : $"UPDATE [{table}] SET [{col}]='{value}' WHERE [Id]='{id}';";
 
-            using var cmd = new SqlCommand(sql);
+            using var cmd = new SqlCommand(sql, connection);
             await cmd.ExecuteNonQueryAsync();
 
             await connection.CloseAsync();
