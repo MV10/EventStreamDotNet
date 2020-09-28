@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -22,6 +23,8 @@ namespace EventStreamDotNet
         /// </summary>
         private List<DomainEventBase> singleEvent = new List<DomainEventBase>(1);
 
+        private readonly DebugLogger<EventStreamManager<TDomainModelRoot>> logger;
+
         /// <summary>
         /// Constructor.
         /// </summary>
@@ -31,6 +34,9 @@ namespace EventStreamDotNet
         public EventStreamManager(string id, EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
         {
             eventStream = new EventStreamProcessor<TDomainModelRoot>(id, config, eventHandler);
+
+            logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(config.LoggerFactory);
+            logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
 
         /// <inheritdoc />
@@ -43,6 +49,8 @@ namespace EventStreamDotNet
         /// <inheritdoc />
         public async Task<TDomainModelRoot> GetCopyOfState(bool forceRefresh = false)
         {
+            logger.LogDebug($"{nameof(GetCopyOfState)}({nameof(forceRefresh)}: {forceRefresh})");
+
             if (!eventStream.IsInitialized) throw new Exception("The EventStreamManager has not been initialized");
 
             if (forceRefresh)
@@ -56,6 +64,8 @@ namespace EventStreamDotNet
         /// <inheritdoc />
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false)
         {
+            logger.LogDebug($"{nameof(PostDomainEvent)}({nameof(delta)}: {delta.GetType().Name}, {nameof(onlyWhenCurrent)}: {onlyWhenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState})");
+
             singleEvent[0] = delta;
             return await PostDomainEvents(singleEvent, onlyWhenCurrent, doNotCopyState);
         }
@@ -63,6 +73,13 @@ namespace EventStreamDotNet
         /// <inheritdoc />
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false)
         {
+            if(logger.Available)
+            {
+                logger.LogDebug($"{nameof(PostDomainEvents)}({nameof(deltas)}: {deltas.Count}, {nameof(onlyWhenCurrent)}: {onlyWhenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState})");
+                foreach (var d in deltas)
+                    logger.LogDebug($"  {nameof(deltas)}: {d.GetType().Name}");
+            }
+
             if (!eventStream.IsInitialized) throw new Exception("The EventStreamManager has not been initialized");
 
             var success = await eventStream.WriteEvents(deltas, onlyWhenCurrent);

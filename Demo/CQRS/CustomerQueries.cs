@@ -17,17 +17,17 @@ namespace Demo
 
         public async Task<APIResult<Customer>> FindCustomer(string id)
         {
-
+            return null;
         }
 
         public async Task<APIResult<List<string>>> FindAllCustomerIds()
         {
-
+            return null;
         }
 
         public async Task<APIResult<bool>> CustomerExists(string id)
         {
-
+            return null;
         }
     }
 }

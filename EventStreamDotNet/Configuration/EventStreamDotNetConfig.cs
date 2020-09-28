@@ -1,5 +1,5 @@
 ﻿
-using EventStreamDotNet;
+using Microsoft.Extensions.Logging;
 
 namespace EventStreamDotNet
 {
@@ -24,5 +24,10 @@ namespace EventStreamDotNet
         /// not read from a configuration file.
         /// </summary>
         public ProjectionConfig ProjectionHandlers { get; set; }
+
+        /// <summary>
+        /// When set, the library will emit Debug-level log output to the configured logger.
+        /// </summary>
+        public ILoggerFactory LoggerFactory { get; set; }
     }
 }

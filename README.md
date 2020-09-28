@@ -25,6 +25,7 @@ The client application is responsible for providing:
 Package dependencies:
 
 * JSON.Net
+* Microsoft.Extensions.Logging
 * System.Data.SqlClient
 
 Note this is _not_ intended as a thread-safe implementation.

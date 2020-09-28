@@ -16,5 +16,10 @@ namespace EventStreamDotNet
         /// is generated, or the number of seconds before a new snapshot is generated.
         /// </summary>
         public long SnapshotInterval { get; set; }
+
+        /// <summary>
+        /// The default QueueSize for EventStreamCollections. Set zero to disable collection size limits.
+        /// </summary>
+        public int DefaultCollectionQueueSize { get; set; }
     }
 }

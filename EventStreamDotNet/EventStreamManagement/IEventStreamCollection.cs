@@ -42,6 +42,11 @@ namespace EventStreamDotNet
         void ReleaseEventStreamManager(string id);
 
         /// <summary>
+        /// Returns a list of the event stream IDs currently held in the collection.
+        /// </summary>
+        List<string> GetEventStreamIds();
+
+        /// <summary>
         /// A copy of the domain model's state based on the last time this manager read or updated the stream. The
         /// client application should always consider the copy of the state to be stale as soon as the copy is obtained.
         /// </summary>

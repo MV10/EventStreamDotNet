@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -6,18 +7,21 @@ using System.Threading.Tasks;
 namespace EventStreamDotNet
 {
     /// <summary>
-    /// A collection to manage and interact with multiple EventStreamManagers for a given domain model.
+    /// A collection to manage and interact with multiple EventStreamManagers for a given domain model. All public
+    /// manager methods are reproduced here (except Id and Initialize, which are handled interally), so if multiple
+    /// event streams are needed, the client application needs not interact directly with a manager at all.
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
     public class EventStreamCollection<TDomainModelRoot> : IEventStreamCollection<TDomainModelRoot>
         where TDomainModelRoot : class, IDomainModelRoot<TDomainModelRoot>, new()
     {
-        private readonly Dictionary<string, IEventStreamManager<TDomainModelRoot>> managers = new Dictionary<string, IEventStreamManager<TDomainModelRoot>>();
-        private readonly List<string> fifoQueue = new List<string>();
         private readonly IDomainModelEventHandler<TDomainModelRoot> eventHandler;
         private readonly EventStreamDotNetConfig config;
+        private readonly Dictionary<string, IEventStreamManager<TDomainModelRoot>> managers;
+        private readonly List<string> fifoQueue;
+        private readonly DebugLogger<EventStreamCollection<TDomainModelRoot>> logger;
 
-        private int queueSize = 10;
+        private int queueSize;
 
         /// <summary>
         /// Constructor.
@@ -28,6 +32,12 @@ namespace EventStreamDotNet
         {
             this.eventHandler = eventHandler;
             this.config = config;
+            queueSize = config.Policies.DefaultCollectionQueueSize;
+            managers = new Dictionary<string, IEventStreamManager<TDomainModelRoot>>(queueSize + 1);
+            fifoQueue = new List<string>(queueSize + 1);
+            
+            logger = new DebugLogger<EventStreamCollection<TDomainModelRoot>>(config.LoggerFactory);
+            logger.LogDebug($"Created {nameof(EventStreamCollection<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
 
         /// <inheritdoc />
@@ -61,6 +71,10 @@ namespace EventStreamDotNet
         /// <inheritdoc />
         public void ReleaseEventStreamManager(string id)
             => managers.Remove(id);
+
+        /// <inheritdoc />
+        public List<string> GetEventStreamIds()
+            => new List<string>(fifoQueue);
 
         /// <inheritdoc />
         public async Task<TDomainModelRoot> GetCopyOfState(string id, bool forceRefresh = false)

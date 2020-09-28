@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -77,6 +78,8 @@ namespace EventStreamDotNet
         /// </summary>
         private JsonSerializerSettings jsonSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
 
+        private readonly DebugLogger<EventStreamProcessor<TDomainModelRoot>> logger;
+
         /// <summary>
         /// Constructor.
         /// </summary>
@@ -89,6 +92,9 @@ namespace EventStreamDotNet
             Config = config;
             this.eventHandler = eventHandler;
             IsInitialized = false;
+
+            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(config.LoggerFactory);
+            logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
 
 
@@ -100,6 +106,8 @@ namespace EventStreamDotNet
         /// </summary>
         internal async Task Initialize()
         {
+            logger.LogDebug($"{nameof(Initialize)}");
+
             applyMethods = new Dictionary<Type, MethodInfo>();
             var methods = eventHandler.GetType().GetMethods();
             foreach(var method in methods)
