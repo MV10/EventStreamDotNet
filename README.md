@@ -1,8 +1,6 @@
 # EventStreamDotNet
 
-A simple delta-logging Event Stream library for .NET and SQL Server.
-
-This is a work-in-progress.
+A simple delta-logging Event Stream library for .NET and SQL Server. This is a work-in-progress, although it is largely complete. I will publish a NuGet package when I'm satisfied with the library behavior.
 
 The general plan is typical of Event Stream systems:
 
@@ -20,7 +18,7 @@ The client application is responsible for providing:
 * the domain event classes
 * the domain event handler (applies event changes to the state)
 * optional projection handlers
-* API (likely CQRS) for interacting with the event stream manager
+* services (likely CQRS) for interacting with the event stream manager
 
 Package dependencies:
 

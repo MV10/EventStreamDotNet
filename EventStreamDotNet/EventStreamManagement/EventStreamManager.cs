@@ -36,7 +36,7 @@ namespace EventStreamDotNet
             eventStream = new EventStreamProcessor<TDomainModelRoot>(id, config, eventHandler);
 
             logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(config.LoggerFactory);
-            logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
+            logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name} ID {id}");
         }
 
         /// <inheritdoc />
@@ -66,7 +66,8 @@ namespace EventStreamDotNet
         {
             logger.LogDebug($"{nameof(PostDomainEvent)}({nameof(delta)}: {delta.GetType().Name}, {nameof(onlyWhenCurrent)}: {onlyWhenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState})");
 
-            singleEvent[0] = delta;
+            singleEvent.Clear();
+            singleEvent.Add(delta);
             return await PostDomainEvents(singleEvent, onlyWhenCurrent, doNotCopyState);
         }
 
@@ -77,7 +78,7 @@ namespace EventStreamDotNet
             {
                 logger.LogDebug($"{nameof(PostDomainEvents)}({nameof(deltas)}: {deltas.Count}, {nameof(onlyWhenCurrent)}: {onlyWhenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState})");
                 foreach (var d in deltas)
-                    logger.LogDebug($"  {nameof(deltas)}: {d.GetType().Name}");
+                    logger.LogDebug($"  Posting delta: {d.GetType().Name}");
             }
 
             if (!eventStream.IsInitialized) throw new Exception("The EventStreamManager has not been initialized");

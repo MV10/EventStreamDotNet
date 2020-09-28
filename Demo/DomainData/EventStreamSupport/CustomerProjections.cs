@@ -21,11 +21,18 @@ namespace Demo
             this.dbConfig = AppConfig.Get.EventStreamDotNet.Database;
         }
 
+        // The main program associates this with snapshot updates.
         public async void ProjectCustomerResidency(IDomainModelRoot snapshot)
         {
             try
             {
                 var customer = snapshot as Customer;
+
+                // The StreamInitialized event is just new() on the domain model root; it isn't
+                // necessarily fully or correctly populated yet, but it still triggers a snapshot
+                // update -- this is an example of the need to guard against null ref exceptions:
+                if (customer.PrimaryAccountHolder?.Residence?.StateOrProvince == null) return;
+
                 var homeState = customer.PrimaryAccountHolder.Residence.StateOrProvince;
                 if (homeState.Length > 2) homeState = homeState.Substring(0, 2);
 
@@ -39,6 +46,7 @@ namespace Demo
             }
         }
 
+        // The main program associates this with the SpouseUpdated and SpouseRemoved domain events.
         public async void ProjectCustomerMaritalStatus(IDomainModelRoot snapshot)
         {
             try
@@ -60,6 +68,7 @@ namespace Demo
         private async Task InsertOrUpdate(string id, string table, string col, string value)
         {
             using var connection = new SqlConnection(dbConfig.ConnectionString);
+            await connection.OpenAsync();
 
             using var query = new SqlCommand($"SELECT COUNT(*) AS [ScalarVal] FROM [{table}] WHERE [Id]='{id}';", connection);
             int count = (int) await query.ExecuteScalarAsync();

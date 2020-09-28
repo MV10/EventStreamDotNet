@@ -59,7 +59,7 @@ namespace EventStreamDotNet
 
             if (managers.ContainsKey(id)) return managers[id];
 
-            var mgr = Activator.CreateInstance(typeof(IEventStreamManager<TDomainModelRoot>), id, config, eventHandler) as IEventStreamManager<TDomainModelRoot>;
+            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), id, config, eventHandler) as IEventStreamManager<TDomainModelRoot>;
             await mgr.Initialize();
             AddManager(mgr);
 
@@ -104,7 +104,7 @@ namespace EventStreamDotNet
         /// </summary>
         private void AddManager(IEventStreamManager<TDomainModelRoot> manager)
         {
-            logger.LogDebug($"{nameof(AddManager)} adding manager for event stream {manager.Id}");
+            logger.LogDebug($"EventStreamCollection {nameof(AddManager)} for ID {manager.Id}");
 
             managers.Add(manager.Id, manager);
             fifoQueue.Add(manager.Id);

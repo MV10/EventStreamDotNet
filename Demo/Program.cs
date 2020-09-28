@@ -13,7 +13,7 @@ namespace Demo
     {
         static async Task Main(string[] args)
         {
-            Console.WriteLine("EventStreamDotNet demo");
+            Console.WriteLine("\nEventStreamDotNet demo\n");
 
             // The library can optionally be configured with any implementation of the
             // standard Microsoft ILoggerFactory to enable debug-level log output from
@@ -21,7 +21,7 @@ namespace Demo
             // or other libraries like NLog could be used.
             var loggerFactory = new LoggerFactory()
                 .AddSerilog(new LoggerConfiguration()
-                    .MinimumLevel.Debug()
+                    .MinimumLevel.Verbose()
                     .WriteTo.Console()
                     .CreateLogger());
 
@@ -39,7 +39,7 @@ namespace Demo
                 AppConfig.Get.EventStreamDotNet.LoggerFactory = loggerFactory;
 
                 Console.Write("\nDelete all records from the demo database (Y/N)? ");
-                var key = Console.ReadKey();
+                var key = Console.ReadKey(true);
 
                 if(key.Key.Equals(ConsoleKey.Y))
                 {
@@ -102,14 +102,14 @@ namespace Demo
                     Console.WriteLine("Creating new customer.");
                     result = await customerCommands.NewCustomer(customerId, person, residence);
                     if (!result.Success)
-                        throw new Exception("Failed to create new customer");
+                        throw new Exception($"Failed to create new customer: {result.Message}");
                 }
                 else
                 {
                     Console.WriteLine("Retrieving customer.");
                     result = await customerQueries.FindCustomer(customerId);
                     if (!result.Success)
-                        throw new Exception("Failed to retrieve customer snapshot");
+                        throw new Exception($"Failed to retrieve customer snapshot: {result.Message}");
                 }
 
                 // Add or remove a spouse
@@ -129,31 +129,31 @@ namespace Demo
                     Console.WriteLine("Adding spouse (yay).");
                     result = await customerCommands.UpdateSpouse(customerId, spouse);
                     if (!result.Success)
-                        throw new Exception("Failed to add spouse");
+                        throw new Exception($"Failed to add spouse: {result.Message}");
                 }
                 else
                 {
                     Console.WriteLine("Removing spouse (boo).");
                     result = await customerCommands.UpdateSpouse(customerId, null);
                     if (!result.Success)
-                        throw new Exception("Failed to remove spouse");
-                }
-
-                if (!Debugger.IsAttached)
-                {
-                    Console.WriteLine("\n\nPress any key to exit...");
-                    Console.ReadKey(true);
+                        throw new Exception($"Failed to remove spouse: {result.Message}");
                 }
             }
             catch (Exception ex)
             {
-                // Uses the Serilog static logger.
-                Log.Logger.Error(ex, "Exception caught in Program.Main");
+                Console.WriteLine($"\nException caught in Program.Main:\n{ex.Message}");
+                if (ex.InnerException != null) Console.WriteLine(ex.InnerException.Message);
             }
             finally
             {
                 // Purge any pending log entries and dispose.
                 Log.CloseAndFlush();
+            }
+
+            if (!Debugger.IsAttached)
+            {
+                Console.WriteLine("\n\nPress any key to exit...");
+                Console.ReadKey(true);
             }
         }
 
@@ -161,6 +161,7 @@ namespace Demo
         {
             var cfg = AppConfig.Get.EventStreamDotNet.Database;
             using var connection = new SqlConnection(cfg.ConnectionString);
+            await connection.OpenAsync();
             using var cmd1 = new SqlCommand($"TRUNCATE TABLE {cfg.EventTableName};", connection);
             using var cmd2 = new SqlCommand($"TRUNCATE TABLE {cfg.SnapshotTableName};", connection);
             await cmd1.ExecuteNonQueryAsync();

@@ -47,6 +47,7 @@ namespace Demo
             {
                 var results = new List<string>();
                 using var connection = new SqlConnection(dbConfig.ConnectionString);
+                await connection.OpenAsync();
                 using var cmd = new SqlCommand($"SELECT DISTINCT [Id] FROM [{dbConfig.EventTableName}];", connection);
                 using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleResult);
                 if(reader.HasRows)
@@ -70,6 +71,7 @@ namespace Demo
             try
             {
                 using var connection = new SqlConnection(dbConfig.ConnectionString);
+                await connection.OpenAsync();
                 using var cmd = new SqlCommand($"SELECT COUNT(*) AS [ScalarVal] FROM [{dbConfig.EventTableName}] WHERE [Id]='{id}';", connection);
                 var count = (int) await cmd.ExecuteScalarAsync();
                 await connection.CloseAsync();
