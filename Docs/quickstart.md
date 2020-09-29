@@ -26,11 +26,13 @@ The class must implement the library's `IDomainModelEventHandler<TDomainModelRoo
 
 Note that the `DomainModelState` property is transient. The library will set the value before calling an `Apply` method, then it will clear the value (setting it to `null`) immediately after the call returns. This ensures the client application will not depend on the property for any other purpose.
 
+Call `DomainEventHandlers.RegisterDomainEventHandler` at startup so that the library can cache your handler. You will never need to create or call your event handler in your own code, it is completely managed within the library.
+
 ### Decision: Manager or Collection?
 
 The library offers two approaches for working with the domain data model. The `EventStreamManager` is tied to a single specific domain object, and therefore a single specific ID value. This is equivalent to working with a single record in a traditional database model -- one customer, in the context of the demo project. Alternately, you can use `EventStreamCollection` which manages multiple copies of `EventStreamManager`. They have the same general interface, but the collection version accepts an ID argument to control which specific domain data object you're working with. The collection approach is more appropriate for scenarios like batch processing.
 
-The collection class constructor requires an `EventStreamDotNetConfig` object and a reference to the domain model event handler object. The manager class constructor requires both of these, and also the unique ID representing that model instance. (The event handler isn't useful to your client application, so typically you will just create it inline with the collection or manager constructor.)
+The collection class constructor requires an `EventStreamDotNetConfig` object. The manager class constructor also requires the configuration object along with the unique ID representing that model instance.
 
 **IMPORTANT:** If you're using the single-object `EventStreamManager` class, you must also await the `Initialize` method before using the manager. This performs certain asynchronous database operations that are not appropriate in a constructor. Calling other manager methods without calling `Initialize` will throw exceptions. It is not necessary to initialize the collection class.
 

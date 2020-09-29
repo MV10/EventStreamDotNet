@@ -57,16 +57,6 @@ namespace EventStreamDotNet
         private TDomainModelRoot domainModelState;
 
         /// <summary>
-        /// Hosts the domain model event Apply methods
-        /// </summary>
-        private readonly IDomainModelEventHandler<TDomainModelRoot> eventHandler;
-
-        /// <summary>
-        /// During initializtion all Apply methods in the EventHandler are stored, keyed on the domain event they process.
-        /// </summary>
-        private Dictionary<Type, MethodInfo> applyMethods;
-
-        /// <summary>
         /// During public/internal processing, a list of event stream and snapshot projection
         /// handlers are collected. Prior to exit, the handlers are invoked in order, then
         /// the list is reset.
@@ -86,11 +76,10 @@ namespace EventStreamDotNet
         /// <param name="id">The unique identifier for this domain model object and event stream.</param>
         /// <param name="config">The configuration for this event stream.</param>
         /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
-        public EventStreamProcessor(string id, EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
+        public EventStreamProcessor(string id, EventStreamDotNetConfig config)
         {
             Id = id;
             Config = config;
-            this.eventHandler = eventHandler;
             IsInitialized = false;
 
             logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(config.LoggerFactory);
@@ -108,19 +97,11 @@ namespace EventStreamDotNet
         {
             logger.LogDebug($"{nameof(Initialize)} ID {Id}");
 
-            applyMethods = new Dictionary<Type, MethodInfo>();
-            var methods = eventHandler.GetType().GetMethods();
-            foreach(var method in methods)
-            {
-                if(method.Name == "Apply")
-                {
-                    var type = method.GetParameters()[0].ParameterType;
-                    applyMethods.Add(type, method);
-                    logger.LogDebug($"  Caching Apply method for domain event {type.Name}");
-                }
-            }
+            if (!DomainEventHandlers.IsDomainEventHandlerRegistered<TDomainModelRoot>())
+                throw new Exception($"No domain event handler registered for domain model {typeof(TDomainModelRoot).Name}");
 
             IsInitialized = true;
+
             await ReadAllEvents();
         }
 
@@ -206,6 +187,7 @@ namespace EventStreamDotNet
                 ETag++;
                 if(delta.ETag == DomainEventBase.ETAG_NOT_ASSIGNED)
                 {
+                    delta.Id = Id;
                     delta.ETag = ETag;
                     await WriteAndApplyEvent(connection, delta);
                 }
@@ -430,13 +412,11 @@ namespace EventStreamDotNet
         /// <param name="loggedEvent">The domain event to apply.</param>
         private void ApplyEvent(DomainEventBase loggedEvent)
         {
-            eventHandler.DomainModelState = domainModelState;
-            applyMethods[loggedEvent.GetType()].Invoke(eventHandler, new[] { loggedEvent });
+            DomainEventHandlers.ApplyEvent(domainModelState, loggedEvent);
             ETag = loggedEvent.ETag;
             TryAddDomainEventProjectionHandlers(loggedEvent);
-            eventHandler.DomainModelState = null;
 
-            logger.LogDebug($"Applied event {loggedEvent.GetType().Name} to promote model ID {loggedEvent.Id} to ETag {loggedEvent.ETag}");
+            logger.LogDebug($"Applied event {loggedEvent.GetType().Name} to promote model ID {Id} to ETag {loggedEvent.ETag}");
         }
 
         /// <summary>

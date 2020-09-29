@@ -15,7 +15,6 @@ namespace EventStreamDotNet
     public class EventStreamCollection<TDomainModelRoot> : IEventStreamCollection<TDomainModelRoot>
         where TDomainModelRoot : class, IDomainModelRoot, new()
     {
-        private readonly IDomainModelEventHandler<TDomainModelRoot> eventHandler;
         private readonly EventStreamDotNetConfig config;
         private readonly Dictionary<string, IEventStreamManager<TDomainModelRoot>> managers;
         private readonly List<string> fifoQueue;
@@ -28,14 +27,13 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="config">The configuration for this event stream.</param>
         /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
-        public EventStreamCollection(EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
+        public EventStreamCollection(EventStreamDotNetConfig config)
         {
             if (string.IsNullOrWhiteSpace(config.Database.ConnectionString)
                 || string.IsNullOrWhiteSpace(config.Database.EventTableName)
                 || string.IsNullOrWhiteSpace(config.Database.SnapshotTableName))
                 throw new ArgumentException("Missing one or more required database configuration values");
 
-            this.eventHandler = eventHandler;
             this.config = config;
             queueSize = config.Policies.DefaultCollectionQueueSize;
             managers = new Dictionary<string, IEventStreamManager<TDomainModelRoot>>(queueSize + 1);
@@ -64,7 +62,7 @@ namespace EventStreamDotNet
 
             if (managers.ContainsKey(id)) return managers[id];
 
-            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), id, config, eventHandler) as IEventStreamManager<TDomainModelRoot>;
+            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), id, config) as IEventStreamManager<TDomainModelRoot>;
             await mgr.Initialize();
             AddManager(mgr);
 

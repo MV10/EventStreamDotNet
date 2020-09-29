@@ -31,14 +31,14 @@ namespace EventStreamDotNet
         /// <param name="id">The unique identifier for this domain model object and event stream.</param>
         /// <param name="config">The configuration for this event stream.</param>
         /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
-        public EventStreamManager(string id, EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
+        public EventStreamManager(string id, EventStreamDotNetConfig config)
         {
             if (string.IsNullOrWhiteSpace(config.Database.ConnectionString)
                 || string.IsNullOrWhiteSpace(config.Database.EventTableName)
                 || string.IsNullOrWhiteSpace(config.Database.SnapshotTableName))
                 throw new ArgumentException("Missing one or more required database configuration values");
 
-            eventStream = new EventStreamProcessor<TDomainModelRoot>(id, config, eventHandler);
+            eventStream = new EventStreamProcessor<TDomainModelRoot>(id, config);
 
             logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(config.LoggerFactory);
             logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name} ID {id}");

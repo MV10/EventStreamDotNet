@@ -51,13 +51,16 @@ namespace Demo
                     Console.WriteLine("NO\n");
                 }
 
+                // Register a domain event handler for our Customer domain data model
+                DomainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
+
                 // This is just one possible usage pattern. The thinking here is that a CQRS service will
                 // execute commands against a collection of event streams tied to the same domain model, and
                 // will execute queries against snapshots and projections for that domain model. Probably a
                 // production app would not start a CQRS query service with the EventStreamDotNet configuration,
                 // however (it does not, for example, specify projection table names, which might even be stored
                 // into a completely separate database for performance reasons).
-                var customerManagers = new EventStreamCollection<Customer>(AppConfig.Get.EventStreamDotNet, new CustomerEventHandler());
+                var customerManagers = new EventStreamCollection<Customer>(AppConfig.Get.EventStreamDotNet);
                 var customerQueries = new CustomerQueries(customerManagers);
                 var customerCommands = new CustomerCommands(customerManagers, customerQueries);
 
