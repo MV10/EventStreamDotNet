@@ -7,7 +7,6 @@ namespace Demo
     {
         public string Id { get; set; }
 
-        public string CustomerAccountNumber { get; set; }
         public Person PrimaryAccountHolder { get; set; }
         public Person Spouse { get; set; }
         public Address MailingAddress { get; set; }

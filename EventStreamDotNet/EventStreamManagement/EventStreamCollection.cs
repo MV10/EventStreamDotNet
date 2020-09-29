@@ -30,6 +30,11 @@ namespace EventStreamDotNet
         /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
         public EventStreamCollection(EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
         {
+            if (string.IsNullOrWhiteSpace(config.Database.ConnectionString)
+                || string.IsNullOrWhiteSpace(config.Database.EventTableName)
+                || string.IsNullOrWhiteSpace(config.Database.SnapshotTableName))
+                throw new ArgumentException("Missing one or more required database configuration values");
+
             this.eventHandler = eventHandler;
             this.config = config;
             queueSize = config.Policies.DefaultCollectionQueueSize;

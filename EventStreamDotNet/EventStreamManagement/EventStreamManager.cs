@@ -33,6 +33,11 @@ namespace EventStreamDotNet
         /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
         public EventStreamManager(string id, EventStreamDotNetConfig config, IDomainModelEventHandler<TDomainModelRoot> eventHandler)
         {
+            if (string.IsNullOrWhiteSpace(config.Database.ConnectionString)
+                || string.IsNullOrWhiteSpace(config.Database.EventTableName)
+                || string.IsNullOrWhiteSpace(config.Database.SnapshotTableName))
+                throw new ArgumentException("Missing one or more required database configuration values");
+
             eventStream = new EventStreamProcessor<TDomainModelRoot>(id, config, eventHandler);
 
             logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(config.LoggerFactory);

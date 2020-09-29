@@ -1,6 +1,6 @@
 # EventStreamDotNet
 
-A simple delta-logging Event Stream library for .NET and SQL Server. This is a work-in-progress, although it is largely complete. I will publish a NuGet package when I'm satisfied with the library behavior.
+A simple delta-logging Event Stream library for .NET and SQL Server. This is a work-in-progress, although it is largely complete. I will publish a NuGet package when I'm satisfied with the library behavior. The demo project is fairly extensive and shows how to use all major features. The wiki has good getting-started content, although I will probably switch to a documentation folder in the repository to facilitate contributions from others.
 
 The general plan is typical of Event Stream systems:
 
@@ -25,5 +25,3 @@ Package dependencies:
 * JSON.Net
 * Microsoft.Extensions.Logging
 * System.Data.SqlClient
-
-Note this is _not_ intended as a thread-safe implementation.

@@ -11,12 +11,12 @@ namespace EventStreamDotNet
         /// <summary>
         /// How the library connects to and uses the event and snapshot tables.
         /// </summary>
-        public DatabaseConfig Database { get; set; }
+        public DatabaseConfig Database { get; set; } = new DatabaseConfig();
 
         /// <summary>
         /// Various controls relating to event stream and snapshot handling.
         /// </summary>
-        public PoliciesConfig Policies { get; set; }
+        public PoliciesConfig Policies { get; set; } = new PoliciesConfig();
 
         /// <summary>
         /// Registry of client application handlers that generate projections based

@@ -9,7 +9,7 @@ namespace EventStreamDotNet
         /// <summary>
         /// Defines how the library updates the domain model snapshot stored in the database.
         /// </summary>
-        public SnapshotFrequencyEnum SnapshotFrequency { get; set; }
+        public SnapshotFrequencyEnum SnapshotFrequency { get; set; } = SnapshotFrequencyEnum.AfterAllEvents;
 
         /// <summary>
         /// Based on the configured frequency, either the number of events before a new snapshot
@@ -20,6 +20,6 @@ namespace EventStreamDotNet
         /// <summary>
         /// The default QueueSize for EventStreamCollections. Set zero to disable collection size limits.
         /// </summary>
-        public int DefaultCollectionQueueSize { get; set; }
+        public int DefaultCollectionQueueSize { get; set; } = 0;
     }
 }
