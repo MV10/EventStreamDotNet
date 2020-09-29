@@ -12,25 +12,25 @@ The library defines a set of configuration classes designed to be populated by t
 
 ### Create a Domain Data Model
 
-If you're unfamiliar with the concept of domain data models, you should review the Architectural Patterns page first. It is critical that you get the model right before you begin. The model classes must be POCOs with default constructors (that is, a constructor without arguments, which allows the objects to be serialized and deserialized). The root class of your domain model hierarchy must implement the library's `IDomainModelRoot` interface, which requires the class to have a `string Id` property. The demo project's `DomainData\DataModel` folder contains an example of a complete domain data model. The `Customer` class is the domain model root.
+If you're unfamiliar with the concept of domain data models, you should review the [Architectural Patterns](architecturalpatterns.md) page first. It is critical that you get the model right before you begin using it. The model classes must be POCOs with default constructors (that is, a constructor without arguments, which allows the objects to be serialized and deserialized). The root class of your domain model hierarchy must implement the library's `IDomainModelRoot` interface, which requires the class to have a `string Id` property. The demo project's `DomainData\DataModel` folder contains an example of a complete domain data model. The `Customer` class is the domain model root.
 
 ### Create Domain Events
 
-You must define a list of domain events as simple classes. Like the domain data model, if this concept is unfamiliar to you, it's important that you review the Architectural Patterns page first. Each domain event class must drive from the library's `DomainEventBase` abstract class. This will add several properties the library requires, but does not require you to implement anything. The demo project's `DomainData\DomainEvents` folder contains examples of domain events.
+You must define a list of domain events as simple classes. Like the domain data model, if this concept is unfamiliar to you, it's important that you review the [Architectural Patterns](architecturalpatterns.md) page first. Each domain event class must drive from the library's `DomainEventBase` abstract class. This will add several properties the library requires, but does not require you to implement anything. The demo project's `DomainData\DomainEvents` folder contains examples of domain events.
 
 ### Create a Domain Event Handler
 
-Finally, you must write a class to handle domain events. This is invoked by the library to apply domain events to a copy of the domain model's state. Keep in mind that conceptually these events are assumed to have already happened. Higher-order business rules have already been considered and "approved" before the command was issued that led to this event. The sole responsibility of this class is to apply the change.
+Finally, you must write a class to handle domain events. This is invoked by the library to apply domain events to a copy of the domain model's state. Keep in mind that conceptually these events are assumed to have already happened when the library invokes this class. That means higher-order business rules have already been considered and "approved" before the command was issued that led to this event. The sole responsibility of this class is to apply the change.
 
 The class must implement the library's `IDomainModelEventHandler<TDomainModelRoot>` interface, which requires a public property of the domain model root class type called `DomainModelState`, and a specific `Apply` method for the library's special `StreamInitialized` property. The class must also provide `Apply` methods for every possible domain event (each method accepts one of the domain events as the method argument). The library discovers and invokes these through reflection. The demo project has an example of this in the `CustomerEventHandler` class.
 
-Note that the `DomainModelState` property is transient. The library will set the value before calling an `Apply` method, then it will clear the value (setting it to `null`) immediately after the call returns. This ensures the client application will not depend on the property for any other purpose.
+Note that the reference stored in the `DomainModelState` property is temporary. The library will set the reference before calling an `Apply` method, then it will clear the reference (setting it to `null`) immediately after the call returns. This ensures the client application can't depend on the property for any other purpose.
 
 Call `DomainEventHandlers.RegisterDomainEventHandler` at startup so that the library can cache your handler. You will never need to create or call your event handler in your own code, it is completely managed within the library.
 
-### Decision: Manager or Collection?
+### Decision: One or Many Domain Objects?
 
-The library offers two approaches for working with the domain data model. The `EventStreamManager` is tied to a single specific domain object, and therefore a single specific ID value. This is equivalent to working with a single record in a traditional database model -- one customer, in the context of the demo project. Alternately, you can use `EventStreamCollection` which manages multiple copies of `EventStreamManager`. They have the same general interface, but the collection version accepts an ID argument to control which specific domain data object you're working with. The collection approach is more appropriate for scenarios like batch processing.
+The library offers two approaches for working with the domain data model. The `EventStreamManager` is tied to a single specific domain object (that is, an _instance_ of the domain data model), and therefore a single specific ID value. This is equivalent to working with a single record in a traditional database model -- one customer, in the context of the demo project. Alternately, you can use `EventStreamCollection` which manages multiple copies of `EventStreamManager`. They have the same general interface, but the collection version accepts an ID argument to control which specific domain data object you're working with. The collection approach is more appropriate for scenarios like batch processing.
 
 The collection class constructor requires an `EventStreamDotNetConfig` object. The manager class constructor also requires the configuration object along with the unique ID representing that model instance.
 
@@ -38,9 +38,11 @@ The collection class constructor requires an `EventStreamDotNetConfig` object. T
 
 ### The "Always Exists" Approach
 
-Each instance of your domain data model has a unique ID, and the library is designed to operate as if the ID "always exists". That means when you create a new `EventStreamManager` for a given ID, if that ID doesn't already exist in the database, the manager will write the special `Stream Initialized` domain event and create a new snapshot of the object. 
+Each instance of your domain data model has a unique ID, and the library is designed to operate as if the ID "always exists". That means when you create a new `EventStreamManager` for a given ID, if that ID doesn't already exist in the database, the manager will write the special `Stream Initialized` domain event and create a new snapshot of the object.
 
-If you need to check for an ID in advance, a simple query against the event stream table will accomplish this. The library doesn't currently have anything to do this for you. Similarly, in keeping with traditional interpretations of Event Streams, the library doesn't have a way to delete the records for a given ID. If you need that capability, it's simple enough to write a query to do this.
+If the ID does already exist in the database, during initialization the manager will read the snapshot, then apply any newer events since the snapshot was created, then produce a new snapshot.
+
+If you need to check for an ID in advance, a simple query against the event stream table will accomplish this. The library doesn't currently have anything to do this for you. Similarly, in keeping with traditional interpretations of Event Streams, the library doesn't have a way to delete a given ID (e.g. removing the domain data object itself). If you need that capability, it's simple enough to write a query to do this -- but you must remove _all_ records for the ID. Never delete an individual domain event record.
 
 ### Common Functionality
 
@@ -48,9 +50,11 @@ Both the `EventStreamManager` and `EventStreamCollection` classes primary functi
 
 Refer to the API pages for details, but a brief description of the common methods follows:
 
-* `GetCopyOfState` - returns a copy of the manager's domain data model
+* `GetCopyOfState` - returns a copy of the manager's domain data object
 * `PostDomainEvent` - logs a single new domain event to the stream, returns an updated domain data model
 * `PostDomainEvents` - logs multiple new domain events to the stream, returns an updated domain data model
+
+Refer to the CQRS classes in the demo project for examples of using these.
 
 ### Other Functionality
 

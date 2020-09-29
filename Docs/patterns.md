@@ -6,11 +6,7 @@ Event Streaming (ES), also sometimes called Event Sourcing, is an architectural 
 
 Before you ever use ES, you need a solid domain data model. This is just a group of related C# data classes (meaning they only expose properties, no methods, no constructors, sometimes called POCOs) that represent the business data you're working with and the relationship between those business objects. That model and the connections between them is collectively known as the _object graph_ and you must identify a single class as the _domain model root_.
 
-The demo program in the repository models a simple banking application. The complete domain data model is shown below. Notice the model is entirely business-oriented terminology. A common mistake is to "pollute" your domain model with technology concerns (for example, temporarily storing UI data paging keys). Nothing about these patterns prohibits the use of other data sources -- if the data isn't crucial to the operation of the business, it doesn't belong in your domain data model. It's easy to add things to the model, but it's difficult and often impossible to ever get rid of them again.
-
-The domain model root _must_ have a unique identifier. In this library, that ID must be a string value. The demo model identifies the `Customer` as the domain model root. In that system, a single customer may hold multiple accounts. Other systems commonly work the other way around, starting from an account which relate to one (or perhaps multiple) people. A utilities billing system may be rooted on an address. Any other model is possible, as long as it accurately reflects the business needs.
-
-Finally, more complex systems may have multiple domain data models. Generally you want to strive to avoid overlaps between these models. (In Astronaut Architect terminology, a group of related domains and how they relate is known as a Bounded Context, but that is beyond the scope of this documentation.) The library doesn't help you with model-to-model relationships, but it can be used in a single application to manage more than one domain model at the same time.
+The repository demo models a simple banking application. The complete domain data model is shown below.
 
 ```
 Customer (class, root)
@@ -19,31 +15,29 @@ Customer (class, root)
   |    |--FullName
   |    |--FirstName
   |    |--LastName
-  |    |--Residence (Address class)
-  |    |    |--Street
-  |    |    |--Street2
-  |    |    |--City
-  |    |    |--StateOrProvince
-  |    |    |--Country
-  |    |    \--PostalCode
-  |    |
   |    |--TaxId
-  |    \--DateOfBirth
+  |    |--DateOfBirth
+  |    \--Residence (Address class)
+  |         |--Street
+  |         |--Street2
+  |         |--City
+  |         |--StateOrProvince
+  |         |--Country
+  |         \--PostalCode
   |
   |--Spouse (Person class)
   |    |--FullName
   |    |--FirstName
   |    |--LastName
-  |    |--Residence (Address class)
-  |    |    |--Street
-  |    |    |--Street2
-  |    |    |--City
-  |    |    |--StateOrProvince
-  |    |    |--Country
-  |    |    \--PostalCode
-  |    |
   |    |--TaxId
-  |    \--DateOfBirth
+  |    |--DateOfBirth
+  |    \--Residence (Address class)
+  |         |--Street
+  |         |--Street2
+  |         |--City
+  |         |--StateOrProvince
+  |         |--Country
+  |         \--PostalCode
   |
   |--MailingAddress (Address class)
   |    |--Street
@@ -60,9 +54,15 @@ Customer (class, root)
        \--AccountBalance
 ```
 
+ Notice the model is entirely business-oriented terminology. A common mistake is to "pollute" your domain model with technology concerns (for example, temporarily storing UI data-paging keys). Nothing about these patterns prohibits the use of data sources _external_ to your domain data model. If the data isn't crucial to the operation of the business, it doesn't belong in your domain data model. It's easy to add things to the model, but it's difficult and sometimes impossible to ever get rid of them again.
+
+The domain model root _must_ have a unique identifier. In this library, that ID must be a string value. The demo model identifies the `Customer` as the domain model root. In that system, a single customer may hold multiple accounts. Other systems commonly work the other way around, starting from an account which relate to one (or perhaps multiple) people. A utilities billing system may be rooted on an address. Any other model is possible, as long as it accurately reflects the business needs.
+
+Finally, more complex systems may have multiple domain data models. Generally you want to strive to avoid overlaps between these models. (In Astronaut Architect terminology, a group of related domains and how they relate is known as a Bounded Context, but that is beyond the scope of this documentation.) The library doesn't help you with model-to-model relationships, but it can be used in a single application to manage more than one domain model at the same time.
+
 ### Command Query Responsibility Separation
 
-CQRS is just a design pattern for a service layer. One architectural approach is to publicly expose a higher-level business-function-focused API (called the Aggregation Pattern and/or Gateway Pattern). Those hide the CQRS layer, which is generally a pair of services, one focused on _commands_ (service calls that do something to the data model), and the other focused on _queries_ (services calls that read data). These can point to different data sources. Often in high-transaction-volume systems, command services will use a write-optimized data store, while query services use a read-optimized store (see the _Projection_ topic for more details about how those data stores would be related). 
+CQRS is just a design pattern for a service layer. A common architectural approach is to publicly expose a higher-level business-function-focused API (called the Aggregation Pattern and/or Gateway Pattern). Those hide the CQRS layer, which is generally a pair of services, one focused on _commands_ (service calls that do something to the data model), and the other focused on _queries_ (services calls that read data). These can point to different data sources. Often in high-transaction-volume systems, command services will use a write-optimized data store, while query services use a read-optimized store (see the _Projections_ topic for more details about how those data stores would be related). 
 
 As mentioned earlier, CQRS isn't strictly necessary to use this library. However, many developers discover that the pattern follows very naturally from the use of DDD and ES, and it also happens to be a convenient organizational approach to your projects based on the way a CQRS service layer interacts with ES.
 
@@ -103,13 +103,15 @@ The library will store these events in the database, which represents how the da
 
 Events can be written individually or in groups. For example, if the primary account holder and their spouse live at the same address, when they move, a batch of three domain events may be needed (7, 8, 9). These are still always recorded as a sequence. Should circumstances require removing the spouse from the system, a new `Spouse Removed` event #10 will be added to the end of the stream. Event #2, `Spouse Changed` will still always exist as part of the history of this instance of the domain data model.
 
+A very interesting and useful side-effect of delta logging is that the event streap represents a 100% complete audit log. It is possible to go back to _any_ point in time during the history of a given domain data object to determine what the state of the data was, and what happened to it afterwards.
+
 ### Snapshots
 
-Most ES systems support the concept of "snapshots" -- a point-in-time copy of the domain model state. In practice, you don't want to load and replay every event in the history of a given domain object, so ES systems have various ways to update a stored snapshot as new events are posted to the event log. It is important that the client application is written with the understanding that the snapshot is only a copy and may not reflect the latest events in the log. (This is what is meant by the event stream itself being "the source of truth" -- the snapshot is _not_ the "real" data, only the event stream is.)
+Most ES systems support the concept of "snapshots" -- a point-in-time copy of the domain model state. In practice, you don't want to load and replay every event in the history of a given domain object before you can use it (although there are ES systems which work that way), so the library provides various ways to update a stored snapshot as new events are posted to the event log. It is important that the client application is written with the understanding that the snapshot is only a copy and may not reflect the latest events in the log. This is what is meant by the event stream itself being "the source of truth" -- the snapshot is _not_ the "real" data, only the event stream is.
 
 It is also important that the client application does not modify any copy of the domain data it receives. Instead, it must issue commands which produce some sort of domain event, describing the changes that resulted from the command. Typically issuing a command also returns an updated copy of the domain model -- again, just a copy, which may or may not also be stored into the database as a snapshot.
 
-The technical term for this architectural pattern is Eventual Consistency. This is the idea that not all systems are always in perfect synchronization. Programmers don't like this, it seems messy, but interestingly, business users are normally comfortable with it -- this is how the real world works. An account balance won't immediately reflect a deposit. Concepts like accounts receivable are directly related. In the real world, it is often desirable to keep that snapshot as up-to-date as possible, and the library does support snapshot updates after every event or every batch of events. With modern database technology and server performance, the overhead is rarely significant.
+The technical term for this architectural pattern is Eventual Consistency. This is the idea that not all systems are always in perfect synchronization. Programmers don't like this, it seems messy, but interestingly, business users are normally comfortable with it -- this is how the real world works. An account balance won't immediately reflect a deposit. Concepts like accounts receivable are directly related. An order may have been received but inventory hasn't been updated yet (also implying the order may be rejecte). While these are common business concepts, in the real world, it is often desirable to keep that snapshot as up-to-date as possible, and the library does support snapshot updates after every event or every batch of events. With modern database technology and server performance, the overhead is rarely significant.
 
 ### Projections
 
