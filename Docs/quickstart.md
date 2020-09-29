@@ -12,11 +12,11 @@ The library defines a set of configuration classes designed to be populated by t
 
 ### Create a Domain Data Model
 
-If you're unfamiliar with the concept of domain data models, you should review the [Architectural Patterns](architecturalpatterns.md) page first. It is critical that you get the model right before you begin using it. The model classes must be POCOs with default constructors (that is, a constructor without arguments, which allows the objects to be serialized and deserialized). The root class of your domain model hierarchy must implement the library's `IDomainModelRoot` interface, which requires the class to have a `string Id` property. The demo project's `DomainData\DataModel` folder contains an example of a complete domain data model. The `Customer` class is the domain model root.
+If you're unfamiliar with the concept of domain data models, you should review the [Architectural Patterns](patterns.md) page first. It is critical that you get the model right before you begin using it. The model classes must be POCOs with default constructors (that is, a constructor without arguments, which allows the objects to be serialized and deserialized). The root class of your domain model hierarchy must implement the library's `IDomainModelRoot` interface, which requires the class to have a `string Id` property. The demo project's `DomainData\DataModel` folder contains an example of a complete domain data model. The `Customer` class is the domain model root.
 
 ### Create Domain Events
 
-You must define a list of domain events as simple classes. Like the domain data model, if this concept is unfamiliar to you, it's important that you review the [Architectural Patterns](architecturalpatterns.md) page first. Each domain event class must drive from the library's `DomainEventBase` abstract class. This will add several properties the library requires, but does not require you to implement anything. The demo project's `DomainData\DomainEvents` folder contains examples of domain events.
+You must define a list of domain events as simple classes. Like the domain data model, if this concept is unfamiliar to you, it's important that you review the [Architectural Patterns](patterns.md) page first. Each domain event class must drive from the library's `DomainEventBase` abstract class. This will add several properties the library requires, but does not require you to implement anything. The demo project's `DomainData\DomainEvents` folder contains examples of domain events.
 
 ### Create a Domain Event Handler
 
@@ -67,3 +67,7 @@ The `EventStreamCollection` object adds properties and methods used to work with
 * `ContainsEventStreamManager` - returns true if the collection already holds a manager for the given ID
 * `ReleaseEventStreamManager` - if the collection has a reference to the given ID, that reference is removed
 * `GetEventStreamIds` - returns a list of the Event Stream IDs currently held in the collection
+
+---
+
+[Return to the documentation index](index.md)

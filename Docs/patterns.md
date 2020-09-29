@@ -116,3 +116,7 @@ The technical term for this architectural pattern is Eventual Consistency. This 
 ### Projections
 
 Another feature of most ES systems are "projections" -- data extracted from the domain data model and stored elsewhere, usually to support reporting or other queries where the full data model is not of interest. The demo project has two examples of projections. One is driven by domain events (which is the more efficient approach) and populates the customer's marital status (`MARRIED` or `SINGLE`) into a separate projection table. The other is driven by snapshot updates (less efficient because they probably happen much more frequently and may not relate to the data of interest) to populate the primary account holder's state of residence to a separate projection table.
+
+---
+
+[Return to the documentation index](index.md)
