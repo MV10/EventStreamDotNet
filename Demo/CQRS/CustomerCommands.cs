@@ -17,10 +17,10 @@ namespace Demo
 {
     public class CustomerCommands
     {
-        private readonly IEventStreamCollection<Customer> managers;
+        private readonly EventStreamCollection<Customer> managers;
         private readonly CustomerQueries queries;
 
-        public CustomerCommands(IEventStreamCollection<Customer> eventStreamManagersCollection, CustomerQueries customerQueries)
+        public CustomerCommands(EventStreamCollection<Customer> eventStreamManagersCollection, CustomerQueries customerQueries)
         {
             managers = eventStreamManagersCollection;
             queries = customerQueries;

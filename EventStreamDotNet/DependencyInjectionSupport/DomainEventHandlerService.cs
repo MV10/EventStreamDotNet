@@ -6,19 +6,21 @@ using System.Reflection;
 namespace EventStreamDotNet
 {
     /// <summary>
-    /// Caches instances of domain event handlers, and caches and invokes all of their Apply methods.
+    /// Caches instances of domain event handlers, and caches and invokes all of their Apply methods. When used
+    /// with dependency injection, register this as a Singleton scoped service. To use this without dependency
+    /// injection, reference the instance provided by an <see cref="EventStreamServiceHost"/> object.
     /// </summary>
-    public static class DomainEventHandlers
+    public class DomainEventHandlerService
     {
         // Keyed on the domain model root
-        private static Dictionary<Type, HandlerItem> handlers = new Dictionary<Type, HandlerItem>();
+        private Dictionary<Type, HandlerItem> handlers = new Dictionary<Type, HandlerItem>();
 
         /// <summary>
         /// Adds a new domain event handler to the cache.
         /// </summary>
         /// <typeparam name="TDomainModelRoot">The domain model used with the event handler.</typeparam>
         /// <param name="handler">An instance of the event handler (this will be stored).</param>
-        public static void RegisterDomainEventHandler<TDomainModelRoot, TDomainModelEventHandler>()
+        public void RegisterDomainEventHandler<TDomainModelRoot, TDomainModelEventHandler>()
             where TDomainModelRoot : class, IDomainModelRoot, new()
             where TDomainModelEventHandler : class, IDomainModelEventHandler<TDomainModelRoot>, new()
         {
@@ -52,7 +54,7 @@ namespace EventStreamDotNet
         /// Indicates whether a domain event handler has been registered for the given domain model.
         /// </summary>
         /// <typeparam name="TDomainModelRoot">The domain model used with the event handler.</typeparam>
-        public static bool IsDomainEventHandlerRegistered<TDomainModelRoot>()
+        public bool IsDomainEventHandlerRegistered<TDomainModelRoot>()
             where TDomainModelRoot : class, IDomainModelRoot, new()
             => handlers.ContainsKey(typeof(TDomainModelRoot));
 
@@ -60,7 +62,7 @@ namespace EventStreamDotNet
         /// Removes a domain event handler from the cache.
         /// </summary>
         /// <typeparam name="TDomainModelRoot">The domain model used with the event handler.</typeparam>
-        public static void UnregisterDomainEventHandler<TDomainModelRoot>()
+        public void UnregisterDomainEventHandler<TDomainModelRoot>()
             where TDomainModelRoot : class, IDomainModelRoot, new()
         {
             var domainType = typeof(TDomainModelRoot);
@@ -73,7 +75,7 @@ namespace EventStreamDotNet
         /// <typeparam name="TDomainModelRoot">The domain model used with the event handler.</typeparam>
         /// <param name="modelState">The domain model state to be updated.</param>
         /// <param name="loggedEvent">The domain event to be applied.</param>
-        internal static void ApplyEvent<TDomainModelRoot>(TDomainModelRoot modelState, DomainEventBase loggedEvent)
+        internal void ApplyEvent<TDomainModelRoot>(TDomainModelRoot modelState, DomainEventBase loggedEvent)
             where TDomainModelRoot : class, IDomainModelRoot, new()
         {
             var domainType = typeof(TDomainModelRoot);

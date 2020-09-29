@@ -19,9 +19,9 @@ namespace Demo
     public class CustomerQueries
     {
         private readonly DatabaseConfig dbConfig;
-        private readonly IEventStreamCollection<Customer> managers;
+        private readonly EventStreamCollection<Customer> managers;
 
-        public CustomerQueries(IEventStreamCollection<Customer> eventStreamManagersCollection)
+        public CustomerQueries(EventStreamCollection<Customer> eventStreamManagersCollection)
         {
             this.dbConfig = AppConfig.Get.EventStreamDotNet.Database;
             managers = eventStreamManagersCollection;

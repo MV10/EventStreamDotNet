@@ -12,11 +12,14 @@ namespace EventStreamDotNet
     /// event streams are needed, the client application needs not interact directly with a manager at all.
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
-    public class EventStreamCollection<TDomainModelRoot> : IEventStreamCollection<TDomainModelRoot>
+    public class EventStreamCollection<TDomainModelRoot>
         where TDomainModelRoot : class, IDomainModelRoot, new()
     {
+        private readonly EventStreamConfigService configService;
+        private readonly DomainEventHandlerService eventHandlerService;
+
         private readonly EventStreamDotNetConfig config;
-        private readonly Dictionary<string, IEventStreamManager<TDomainModelRoot>> managers;
+        private readonly Dictionary<string, EventStreamManager<TDomainModelRoot>> managers;
         private readonly List<string> fifoQueue;
         private readonly DebugLogger<EventStreamCollection<TDomainModelRoot>> logger;
 
@@ -25,25 +28,32 @@ namespace EventStreamDotNet
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="config">The configuration for this event stream.</param>
-        /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
-        public EventStreamCollection(EventStreamDotNetConfig config)
+        /// <param name="configService">A collection of library configuration settings.</param>
+        /// <param name="eventHandlerService">A collection of domain event handlers.</param>
+        public EventStreamCollection(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService)
         {
-            if (string.IsNullOrWhiteSpace(config.Database.ConnectionString)
-                || string.IsNullOrWhiteSpace(config.Database.EventTableName)
-                || string.IsNullOrWhiteSpace(config.Database.SnapshotTableName))
-                throw new ArgumentException("Missing one or more required database configuration values");
+            if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
-            this.config = config;
+            this.configService = configService;
+            this.eventHandlerService = eventHandlerService;
+
+            config = configService.GetConfiguration<TDomainModelRoot>();
             queueSize = config.Policies.DefaultCollectionQueueSize;
-            managers = new Dictionary<string, IEventStreamManager<TDomainModelRoot>>(queueSize + 1);
+            managers = new Dictionary<string, EventStreamManager<TDomainModelRoot>>(queueSize + 1);
             fifoQueue = new List<string>(queueSize + 1);
-            
             logger = new DebugLogger<EventStreamCollection<TDomainModelRoot>>(config.LoggerFactory);
+
             logger.LogDebug($"Created {nameof(EventStreamCollection<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
 
-        /// <inheritdoc />
+        /// <summary>
+        /// Constructor for non-DI-based client applications.
+        /// </summary>
+        /// <param name="serviceHost">An instance of the library's service host.</param>
+        public EventStreamCollection(EventStreamServiceHost serviceHost)
+            : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers)
+        { }
+
         public int QueueSize 
         { 
             get => queueSize; 
@@ -55,47 +65,40 @@ namespace EventStreamDotNet
             }
         }
 
-        /// <inheritdoc />
-        public async Task<IEventStreamManager<TDomainModelRoot>> GetEventStreamManager(string id) 
+        public async Task<EventStreamManager<TDomainModelRoot>> GetEventStreamManager(string id) 
         {
             logger.LogDebug($"{nameof(GetEventStreamManager)}({id})");
 
             if (managers.ContainsKey(id)) return managers[id];
 
-            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), id, config) as IEventStreamManager<TDomainModelRoot>;
-            await mgr.Initialize();
+            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), configService, eventHandlerService) as EventStreamManager<TDomainModelRoot>;
+            await mgr.Initialize(id);
             AddManager(mgr);
 
             return mgr;
         }
 
-        /// <inheritdoc />
         public bool ContainsEventStreamManager(string id)
             => managers.ContainsKey(id);
 
-        /// <inheritdoc />
         public void ReleaseEventStreamManager(string id)
             => managers.Remove(id);
 
-        /// <inheritdoc />
         public List<string> GetEventStreamIds()
             => new List<string>(fifoQueue);
 
-        /// <inheritdoc />
         public async Task<TDomainModelRoot> GetCopyOfState(string id, bool forceRefresh = false)
         {
             var mgr = await GetEventStreamManager(id);
             return await mgr.GetCopyOfState(forceRefresh);
         }
 
-        /// <inheritdoc />
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(string id, DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false) 
         {
             var mgr = await GetEventStreamManager(id);
             return await mgr.PostDomainEvent(delta, onlyWhenCurrent, doNotCopyState);
         }
 
-        /// <inheritdoc />
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(string id, IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false) 
         {
             var mgr = await GetEventStreamManager(id);
@@ -105,7 +108,7 @@ namespace EventStreamDotNet
         /// <summary>
         /// Adds an event stream manager to the dictionary and enqueues the ID in the FIFO list.
         /// </summary>
-        private void AddManager(IEventStreamManager<TDomainModelRoot> manager)
+        private void AddManager(EventStreamManager<TDomainModelRoot> manager)
         {
             logger.LogDebug($"EventStreamCollection {nameof(AddManager)} for ID {manager.Id}");
 

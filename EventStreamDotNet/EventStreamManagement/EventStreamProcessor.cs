@@ -22,7 +22,7 @@ namespace EventStreamDotNet
         /// <summary>
         /// The unique ID assigned to this event stream.
         /// </summary>
-        internal readonly string Id;
+        internal string Id;
 
         /// <summary>
         /// The entity tag (aka version number) for the domain model state stored in this object instance.
@@ -56,6 +56,8 @@ namespace EventStreamDotNet
         /// </summary>
         private TDomainModelRoot domainModelState;
 
+        private readonly DomainEventHandlerService eventHandlerService;
+
         /// <summary>
         /// During public/internal processing, a list of event stream and snapshot projection
         /// handlers are collected. Prior to exit, the handlers are invoked in order, then
@@ -73,17 +75,19 @@ namespace EventStreamDotNet
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="id">The unique identifier for this domain model object and event stream.</param>
-        /// <param name="config">The configuration for this event stream.</param>
-        /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
-        public EventStreamProcessor(string id, EventStreamDotNetConfig config)
+        /// <param name="configService">A collection of library configuration settings.</param>
+        /// <param name="eventHandlerService">A collection of domain event handlers.</param>
+        public EventStreamProcessor(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService)
         {
-            Id = id;
-            Config = config;
-            IsInitialized = false;
+            if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
-            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(config.LoggerFactory);
-            logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name} ID {id}");
+            this.eventHandlerService = eventHandlerService;
+
+            IsInitialized = false;
+            Config = configService.GetConfiguration<TDomainModelRoot>();
+            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(Config.LoggerFactory);
+
+            logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
 
 
@@ -93,12 +97,15 @@ namespace EventStreamDotNet
         /// Reads the snapshot and all newer events. See <see cref="ReadAllEvents"/> for details
         /// of how the snapshot may be updated.
         /// </summary>
-        internal async Task Initialize()
+        /// <param name="id">The unique identifier for this domain model object.</param>
+        internal async Task Initialize(string id)
         {
-            logger.LogDebug($"{nameof(Initialize)} ID {Id}");
+            logger.LogDebug($"{nameof(Initialize)} ID {id}");
 
-            if (!DomainEventHandlers.IsDomainEventHandlerRegistered<TDomainModelRoot>())
+            if (!eventHandlerService.IsDomainEventHandlerRegistered<TDomainModelRoot>())
                 throw new Exception($"No domain event handler registered for domain model {typeof(TDomainModelRoot).Name}");
+
+            Id = id;
 
             IsInitialized = true;
 
@@ -412,7 +419,7 @@ namespace EventStreamDotNet
         /// <param name="loggedEvent">The domain event to apply.</param>
         private void ApplyEvent(DomainEventBase loggedEvent)
         {
-            DomainEventHandlers.ApplyEvent(domainModelState, loggedEvent);
+            eventHandlerService.ApplyEvent(domainModelState, loggedEvent);
             ETag = loggedEvent.ETag;
             TryAddDomainEventProjectionHandlers(loggedEvent);
 

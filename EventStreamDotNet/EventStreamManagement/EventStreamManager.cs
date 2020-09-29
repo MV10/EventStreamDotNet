@@ -10,7 +10,7 @@ namespace EventStreamDotNet
     /// The public interface which client applications use to interact with an event stream and the domain model state.
     /// </summary>
     /// <typeparam name="TDomainModelRoot">The root class of the domain model for this event stream.</typeparam>
-    public class EventStreamManager<TDomainModelRoot> : IEventStreamManager<TDomainModelRoot>
+    public class EventStreamManager<TDomainModelRoot>
         where TDomainModelRoot : class, IDomainModelRoot, new()
     {
         /// <summary>
@@ -28,30 +28,32 @@ namespace EventStreamDotNet
         /// <summary>
         /// Constructor.
         /// </summary>
-        /// <param name="id">The unique identifier for this domain model object and event stream.</param>
-        /// <param name="config">The configuration for this event stream.</param>
-        /// <param name="eventHandler">An instance of the domain event handler for this domain model.</param>
-        public EventStreamManager(string id, EventStreamDotNetConfig config)
+        /// <param name="configService">A collection of library configuration settings.</param>
+        /// <param name="eventHandlerService">A collection of domain event handlers.</param>
+        public EventStreamManager(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService)
         {
-            if (string.IsNullOrWhiteSpace(config.Database.ConnectionString)
-                || string.IsNullOrWhiteSpace(config.Database.EventTableName)
-                || string.IsNullOrWhiteSpace(config.Database.SnapshotTableName))
-                throw new ArgumentException("Missing one or more required database configuration values");
+            if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
-            eventStream = new EventStreamProcessor<TDomainModelRoot>(id, config);
+            eventStream = new EventStreamProcessor<TDomainModelRoot>(configService, eventHandlerService);
+            logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(configService.GetConfiguration<TDomainModelRoot>().LoggerFactory);
 
-            logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(config.LoggerFactory);
-            logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name} ID {id}");
+            logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
 
-        /// <inheritdoc />
-        public async Task Initialize() 
-            => await eventStream.Initialize();
+        /// <summary>
+        /// Constructor for non-DI-based client applications.
+        /// </summary>
+        /// <param name="serviceHost">An instance of the library's service host.</param>
+        public EventStreamManager(EventStreamServiceHost serviceHost)
+            : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers)
+        { }
 
-        /// <inheritdoc />
+
+        public async Task Initialize(string id)
+            => await eventStream.Initialize(id);
+
         public string Id { get => eventStream.Id; }
 
-        /// <inheritdoc />
         public async Task<TDomainModelRoot> GetCopyOfState(bool forceRefresh = false)
         {
             logger.LogDebug($"{nameof(GetCopyOfState)}({nameof(forceRefresh)}: {forceRefresh})");
@@ -66,7 +68,6 @@ namespace EventStreamDotNet
             return eventStream.CopyState();
         }
 
-        /// <inheritdoc />
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false)
         {
             logger.LogDebug($"{nameof(PostDomainEvent)}({nameof(delta)}: {delta.GetType().Name}, {nameof(onlyWhenCurrent)}: {onlyWhenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState})");
@@ -76,7 +77,6 @@ namespace EventStreamDotNet
             return await PostDomainEvents(singleEvent, onlyWhenCurrent, doNotCopyState);
         }
 
-        /// <inheritdoc />
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false)
         {
             if(logger.Available)
