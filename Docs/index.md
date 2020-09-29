@@ -4,11 +4,12 @@ EventStreamDotNet is a simple, easy-to-use library that supports the Event Strea
 
 This is a completely separate stand-alone library, although you may be interested in my article about implementing a similar system using the Microsoft Orleans virtual actor model framework: [Event Sourcing with Orleans Journaled Grains](https://mcguirev10.com/2019/12/05/event-sourcing-with-orleans-journaled-grains.html).
 
+* [Return to the repository README](https://github.com/MV10/EventStreamDotNet)
+
 ### General Information
 
 * [Architectural Patterns](architecturalpatterns.md)
 * [Quick Start](quickstart.md)
-* [Return to the repository README](../README.MD)
 
 ### API Reference
 
