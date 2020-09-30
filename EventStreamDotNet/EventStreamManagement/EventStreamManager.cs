@@ -30,11 +30,12 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="configService">A collection of library configuration settings.</param>
         /// <param name="eventHandlerService">A collection of domain event handlers.</param>
-        public EventStreamManager(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService)
+        /// <param name="projectionHandlerService">A collection of domain model projection handlers.</param>
+        public EventStreamManager(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService, ProjectionHandlerService projectionHandlerService)
         {
             if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
-            eventStream = new EventStreamProcessor<TDomainModelRoot>(configService, eventHandlerService);
+            eventStream = new EventStreamProcessor<TDomainModelRoot>(configService, eventHandlerService, projectionHandlerService);
             logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(configService.GetConfiguration<TDomainModelRoot>().LoggerFactory);
 
             logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
@@ -45,7 +46,7 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="serviceHost">An instance of the library's service host.</param>
         public EventStreamManager(EventStreamServiceHost serviceHost)
-            : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers)
+            : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers, serviceHost.ProjectionHandlers)
         { }
 
 

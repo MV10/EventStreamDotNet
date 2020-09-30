@@ -24,14 +24,18 @@ namespace EventStreamDotNet
             where TDomainModelRoot : class, IDomainModelRoot, new()
             where TDomainModelEventHandler : class, IDomainModelEventHandler<TDomainModelRoot>, new()
         {
+            // ignore the registration if we've already seen this one
             var domainType = typeof(TDomainModelRoot);
             if (handlers.ContainsKey(domainType)) return;
 
+            // create an instance of the handler
             var handler = Activator.CreateInstance(typeof(TDomainModelEventHandler)) as IDomainModelEventHandler<TDomainModelRoot>;
 
+            // prepare to store the handler
             var item = new HandlerItem { Handler = handler };
             var handlerType = handler.GetType();
 
+            // validate and catalog the Apply methods
             var methods = handlerType.GetMethods();
             foreach(var method in methods)
             {
@@ -44,9 +48,9 @@ namespace EventStreamDotNet
                     item.ApplyMethods.Add(type, method);
                 }
             }
-
             if (item.ApplyMethods.Count == 0) throw new ArgumentException($"No Apply methods found for domain event handler {handlerType.Name}");
 
+            // store the handler
             handlers.Add(domainType, item);
         }
 
@@ -84,7 +88,7 @@ namespace EventStreamDotNet
             var item = handlers[domainType];
             var handlerType = item.Handler.GetType();
             var eventType = loggedEvent.GetType();
-            if (!item.ApplyMethods.ContainsKey(eventType)) throw new ArgumentException($"Domain event handler {handlerType.Name} does support domain event {eventType.Name}");
+            if (!item.ApplyMethods.ContainsKey(eventType)) throw new ArgumentException($"Domain event handler {handlerType.Name} does not support domain event {eventType.Name}");
 
             var method = item.ApplyMethods[eventType];
             var handler = item.Handler as IDomainModelEventHandler<TDomainModelRoot>;

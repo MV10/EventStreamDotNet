@@ -17,6 +17,7 @@ namespace EventStreamDotNet
     {
         private readonly EventStreamConfigService configService;
         private readonly DomainEventHandlerService eventHandlerService;
+        private readonly ProjectionHandlerService projectionHandlerService;
 
         private readonly EventStreamDotNetConfig config;
         private readonly Dictionary<string, EventStreamManager<TDomainModelRoot>> managers;
@@ -30,12 +31,14 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="configService">A collection of library configuration settings.</param>
         /// <param name="eventHandlerService">A collection of domain event handlers.</param>
-        public EventStreamCollection(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService)
+        /// <param name="projectionHandlerService">A collection of domain model projection handlers.</param>
+        public EventStreamCollection(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService, ProjectionHandlerService projectionHandlerService)
         {
             if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
             this.configService = configService;
             this.eventHandlerService = eventHandlerService;
+            this.projectionHandlerService = projectionHandlerService;
 
             config = configService.GetConfiguration<TDomainModelRoot>();
             queueSize = config.Policies.DefaultCollectionQueueSize;
@@ -51,7 +54,7 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="serviceHost">An instance of the library's service host.</param>
         public EventStreamCollection(EventStreamServiceHost serviceHost)
-            : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers)
+            : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers, serviceHost.ProjectionHandlers)
         { }
 
         public int QueueSize 
@@ -71,7 +74,7 @@ namespace EventStreamDotNet
 
             if (managers.ContainsKey(id)) return managers[id];
 
-            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), configService, eventHandlerService) as EventStreamManager<TDomainModelRoot>;
+            var mgr = Activator.CreateInstance(typeof(EventStreamManager<TDomainModelRoot>), configService, eventHandlerService, projectionHandlerService) as EventStreamManager<TDomainModelRoot>;
             await mgr.Initialize(id);
             AddManager(mgr);
 

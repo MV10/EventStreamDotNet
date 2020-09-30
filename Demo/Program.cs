@@ -55,13 +55,6 @@ namespace Demo
                 // if you really need to trace through the library calls and arguments.
                 AppConfig.Get.EventStreamDotNet.LoggerFactory = loggerFactory;
 
-                // See comments in the CustomerProjections class for more implementation tips and considerations.
-                var projections = new CustomerProjections();
-                var handlers = AppConfig.Get.EventStreamDotNet.ProjectionHandlers;
-                handlers.AddDomainEventHandler<SpouseChanged>(projections.ProjectCustomerMaritalStatus);
-                handlers.AddDomainEventHandler<SpouseRemoved>(projections.ProjectCustomerMaritalStatus);
-                handlers.AddSnapshotHandler(projections.ProjectCustomerResidency);
-
                 // This demo doesn't use dependency injection, so we'll use the library's helper class,
                 // which exposes services that a DI-based app would register and inject on demand. Then
                 // store our configuration associated with the domain model root, and register the domain
@@ -69,7 +62,7 @@ namespace Demo
                 var eventServices = new EventStreamServiceHost();
                 eventServices.EventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
                 eventServices.DomainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
-
+                eventServices.ProjectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
 
                 // ------------------ PREPARING TO RUN
 

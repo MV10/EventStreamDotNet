@@ -1,10 +1,12 @@
 ﻿
+using Microsoft.Extensions.Logging;
+
 namespace EventStreamDotNet
 {
     /// <summary>
     /// The library's root configuration object.
     /// </summary>
-    public partial class EventStreamDotNetConfig
+    public class EventStreamDotNetConfig
     {
         /// <summary>
         /// How the library connects to and uses the event and snapshot tables.
@@ -15,7 +17,15 @@ namespace EventStreamDotNet
         /// Various controls relating to event stream and snapshot handling.
         /// </summary>
         public PoliciesConfig Policies { get; set; } = new PoliciesConfig();
-    }
 
-    // The rest of this class is in the Programmatic folder as EventStreamDotNetPartial.
+        /// <summary>
+        /// Settings passed into projection handler constructors.
+        /// </summary>
+        public ProjectionConfig Projection { get; set; } = new ProjectionConfig();
+
+        /// <summary>
+        /// When set, the library will emit Debug-level log output to the configured logger.
+        /// </summary>
+        public ILoggerFactory LoggerFactory { get; set; }
+    }
 }

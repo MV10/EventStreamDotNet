@@ -12,6 +12,11 @@ namespace EventStreamDotNet
     /// </summary>
     public class ProjectionConfig
     {
+
+        public string ConnectionString { get; set; }
+
+
+/*
         /// <summary>
         /// Handlers invoked after the snapshot has been updated.
         /// </summary>
@@ -50,5 +55,6 @@ namespace EventStreamDotNet
         /// </summary>
         public void RemoveDomainEventHandler(Action<IDomainModelRoot> handler)
             => DomainEventHandlers.RemoveAll(h => h.handler.Equals(handler));
+*/
     }
 }

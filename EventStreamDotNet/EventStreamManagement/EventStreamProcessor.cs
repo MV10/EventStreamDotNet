@@ -30,62 +30,43 @@ namespace EventStreamDotNet
         internal long ETag = 0;
 
         /// <summary>
-        /// Represents the ETag last read from the snapshot table. Can be used to decide if/when to
-        /// output a new snapshot.
-        /// </summary>
-        internal long LastKnownShapshotETag = -1;
-
-        /// <summary>
-        /// Represents the interval since this object instance wrote a new snapshot.
-        /// </summary>
-        internal Stopwatch LastSnapshotDuration = new Stopwatch();
-
-        /// <summary>
-        /// EventStreamDotNet configuration.
-        /// </summary>
-        internal readonly EventStreamDotNetConfig Config;
-
-        /// <summary>
         /// False until Initialize is called, public/internal methods will throw until then.
         /// </summary>
         internal bool IsInitialized;
 
-        /// <summary>
-        /// Domain model state is kept private to ensure only copies can be retrieved (using method
-        /// names that will remind the developer of the client app that they only obtained a copy.)
-        /// </summary>
+        private readonly EventStreamDotNetConfig config;
+        private readonly DomainEventHandlerService eventHandlerService;
+        private readonly ProjectionHandlerService projectionHandlerService;
+        private readonly DebugLogger<EventStreamProcessor<TDomainModelRoot>> logger;
+        private readonly JsonSerializerSettings jsonSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
+
+        // domain model state is private to ensure only copies can be retrieved
         private TDomainModelRoot domainModelState;
 
-        private readonly DomainEventHandlerService eventHandlerService;
+        // values used to decide if/when to output a new snapshot
+        private Stopwatch lastSnapshotDuration = new Stopwatch();
+        private long lastKnownShapshotETag = -1;
 
-        /// <summary>
-        /// During public/internal processing, a list of event stream and snapshot projection
-        /// handlers are collected. Prior to exit, the handlers are invoked in order, then
-        /// the list is reset.
-        /// </summary>
-        private List<Action<IDomainModelRoot>> queuedProjections = new List<Action<IDomainModelRoot>>();
-
-        /// <summary>
-        /// Ensures Type metadata is stored with the serialized output.
-        /// </summary>
-        private JsonSerializerSettings jsonSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
-
-        private readonly DebugLogger<EventStreamProcessor<TDomainModelRoot>> logger;
+        // tracking for projection handler invocation
+        private bool projectionSnapshotFlag;
+        private List<DomainEventBase> projectionEventLog = new List<DomainEventBase>();
 
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="configService">A collection of library configuration settings.</param>
         /// <param name="eventHandlerService">A collection of domain event handlers.</param>
-        public EventStreamProcessor(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService)
+        /// <param name="projectionHandlerService">A collection of domain model projection handlers.</param>
+        public EventStreamProcessor(EventStreamConfigService configService, DomainEventHandlerService eventHandlerService, ProjectionHandlerService projectionHandlerService)
         {
             if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
             this.eventHandlerService = eventHandlerService;
+            this.projectionHandlerService = projectionHandlerService;
 
             IsInitialized = false;
-            Config = configService.GetConfiguration<TDomainModelRoot>();
-            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(Config.LoggerFactory);
+            config = configService.GetConfiguration<TDomainModelRoot>();
+            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(config.LoggerFactory);
 
             logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
@@ -137,9 +118,10 @@ namespace EventStreamDotNet
 
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
-            queuedProjections.Clear();
+            projectionEventLog.Clear();
+            projectionSnapshotFlag = false;
 
-            using var connection = new SqlConnection(Config.Database.ConnectionString);
+            using var connection = new SqlConnection(config.Database.ConnectionString);
             await connection.OpenAsync();
 
             // get the latest snapshot
@@ -158,7 +140,7 @@ namespace EventStreamDotNet
 
             await connection.CloseAsync();
 
-            InvokeQueuedProjectionHandlers();
+            await InvokeProjections();
 
             // indicate whether a snapshot was updated
             return appliedNewerEvents; 
@@ -179,9 +161,10 @@ namespace EventStreamDotNet
 
             if (!IsInitialized) throw new Exception("The EventStream has not been initialized");
 
-            queuedProjections.Clear();
+            projectionEventLog.Clear();
+            projectionSnapshotFlag = false;
 
-            using var connection = new SqlConnection(Config.Database.ConnectionString);
+            using var connection = new SqlConnection(config.Database.ConnectionString);
             await connection.OpenAsync();
 
             long maxETag = await ReadNewestETag(connection);
@@ -200,32 +183,16 @@ namespace EventStreamDotNet
                 }
             }
 
-            if(Config.Policies.SnapshotFrequency == SnapshotFrequencyEnum.AfterAllEvents)
+            if(config.Policies.SnapshotFrequency == SnapshotFrequencyEnum.AfterAllEvents)
             {
-                await WriteSnapshot();
+                await WriteSnapshot(connection);
             }
 
-            InvokeQueuedProjectionHandlers();
-
-            return true;
-        }
-
-        /// <summary>
-        /// Updates this event stream's snapshot record with a new serialized model state. Does not apply any
-        /// newer events that may have been stored to the event stream.
-        /// </summary>
-        internal async Task WriteSnapshot()
-        {
-            logger.LogDebug($"{nameof(WriteSnapshot)} ID {Id}");
-
-            queuedProjections.Clear();
-
-            using var connection = new SqlConnection(Config.Database.ConnectionString);
-            await connection.OpenAsync();
-            await WriteSnapshot(connection);
             await connection.CloseAsync();
 
-            InvokeQueuedProjectionHandlers();
+            await InvokeProjections();
+
+            return true;
         }
 
 
@@ -241,7 +208,7 @@ namespace EventStreamDotNet
             long etag;
             TDomainModelRoot snapshot;
 
-            using var cmd = new SqlCommand($"SELECT [ETag], [Snapshot] FROM [{Config.Database.SnapshotTableName}] WHERE Id=@Id");
+            using var cmd = new SqlCommand($"SELECT [ETag], [Snapshot] FROM [{config.Database.SnapshotTableName}] WHERE Id=@Id");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
 
@@ -277,8 +244,8 @@ namespace EventStreamDotNet
                 await WriteSnapshot(connection);
             }
 
-            LastKnownShapshotETag = etag;
-            if (!LastSnapshotDuration.IsRunning) LastSnapshotDuration.Restart();
+            lastKnownShapshotETag = etag;
+            if (!lastSnapshotDuration.IsRunning) lastSnapshotDuration.Restart();
 
             return (etag, snapshot);
         }
@@ -291,7 +258,7 @@ namespace EventStreamDotNet
         {
             logger.LogDebug($"{nameof(ApplyNewerEvents)} ID {Id}");
 
-            using var cmd = new SqlCommand($"SELECT [ETag], [Payload] FROM [{Config.Database.EventTableName}] WHERE Id =@Id AND ETag > @ETag ORDER BY ETag ASC;");
+            using var cmd = new SqlCommand($"SELECT [ETag], [Payload] FROM [{config.Database.EventTableName}] WHERE Id =@Id AND ETag > @ETag ORDER BY ETag ASC;");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             cmd.Parameters.AddWithValue("@ETag", ETag);
@@ -318,7 +285,7 @@ namespace EventStreamDotNet
         {
             // The MAX aggregate returns NULL for no rows, allowing ISNULL to substitute the
             // value 0, otherwise ExecuteScalarAsync would return null for an empty recordset
-            using var cmd = new SqlCommand($"SELECT TOP 1 ISNULL(MAX([ETag]), 0) AS ETag FROM [{Config.Database.EventTableName}] WHERE [Id]=@Id ORDER BY [ETag] DESC;");
+            using var cmd = new SqlCommand($"SELECT TOP 1 ISNULL(MAX([ETag]), 0) AS ETag FROM [{config.Database.EventTableName}] WHERE [Id]=@Id ORDER BY [ETag] DESC;");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             var etag = (long)await cmd.ExecuteScalarAsync();
@@ -326,35 +293,6 @@ namespace EventStreamDotNet
             logger.LogDebug($"{nameof(ReadNewestETag)} ID {Id} returning ETag {etag}");
 
             return etag;
-        }
-
-        /// <summary>
-        /// If a domain event projection handler was defined for this event and the handler
-        /// isn't already queued for invocation, add it.
-        /// </summary>
-        /// <param name="appliedEvent">The domain event that has been applied to the domain model state.</param>
-        private void TryAddDomainEventProjectionHandlers(DomainEventBase appliedEvent)
-        {
-            var type = appliedEvent.GetType();
-            var list = Config.ProjectionHandlers.DomainEventHandlers.Where(h => h.type.Equals(type)).ToList();
-            foreach (var item in list)
-            {
-                if (!queuedProjections.Contains(item.handler))
-                    queuedProjections.Add(item.handler);
-            }
-        }
-
-        /// <summary>
-        /// If snapshot projection handlers exist, add any to the queue for invocation which
-        /// haven't already been enqueued.
-        /// </summary>
-        private void TryAddSnapshotProjectionHandlers()
-        {
-            foreach (var handler in Config.ProjectionHandlers.SnapshotHandlers)
-            {
-                if (!queuedProjections.Contains(handler))
-                    queuedProjections.Add(handler);
-            }
         }
 
 
@@ -372,7 +310,7 @@ namespace EventStreamDotNet
 
             logger.LogDebug($"{nameof(WriteAndApplyEvent)} ID {Id} for domain event {eventName} with ETag {delta.ETag}");
 
-            using var cmd = new SqlCommand($"INSERT INTO [{Config.Database.EventTableName}] ([Id], [ETag], [Timestamp], [EventType], [Payload]) VALUES (@Id, @ETag, @Timestamp, @TypeName, @Payload);");
+            using var cmd = new SqlCommand($"INSERT INTO [{config.Database.EventTableName}] ([Id], [ETag], [Timestamp], [EventType], [Payload]) VALUES (@Id, @ETag, @Timestamp, @TypeName, @Payload);");
             cmd.Connection = connection;
             cmd.Parameters.AddWithValue("@Id", Id);
             cmd.Parameters.AddWithValue("@ETag", delta.ETag);
@@ -385,7 +323,7 @@ namespace EventStreamDotNet
             ApplyEvent(delta);
 
             // process individual event-level snapshot policies
-            switch (Config.Policies.SnapshotFrequency)
+            switch (config.Policies.SnapshotFrequency)
             {
                 case SnapshotFrequencyEnum.AfterEachEvent:
                 {
@@ -395,7 +333,7 @@ namespace EventStreamDotNet
 
                 case SnapshotFrequencyEnum.AfterIntervalDeltas:
                 {
-                    if (ETag - LastKnownShapshotETag >= Config.Policies.SnapshotInterval)
+                    if (ETag - lastKnownShapshotETag >= config.Policies.SnapshotInterval)
                     {
                         await WriteSnapshot(connection);
                     }
@@ -404,7 +342,7 @@ namespace EventStreamDotNet
 
                 case SnapshotFrequencyEnum.AfterIntervalSeconds:
                 {
-                    if (LastSnapshotDuration.ElapsedMilliseconds / 1000 >= Config.Policies.SnapshotInterval)
+                    if (lastSnapshotDuration.ElapsedMilliseconds / 1000 >= config.Policies.SnapshotInterval)
                     {
                         await WriteSnapshot(connection);
                     }
@@ -421,7 +359,7 @@ namespace EventStreamDotNet
         {
             eventHandlerService.ApplyEvent(domainModelState, loggedEvent);
             ETag = loggedEvent.ETag;
-            TryAddDomainEventProjectionHandlers(loggedEvent);
+            projectionEventLog.Add(loggedEvent);
 
             logger.LogDebug($"Applied event {loggedEvent.GetType().Name} to promote model ID {Id} to ETag {loggedEvent.ETag}");
         }
@@ -439,33 +377,23 @@ namespace EventStreamDotNet
             using var cmd = new SqlCommand();
             cmd.Connection = connection;
             cmd.CommandText = (ETag == 0)
-                ? $"INSERT INTO [{Config.Database.SnapshotTableName}] ([Id], [ETag], [Snapshot]) VALUES (@Id, @ETag, @Snapshot);"
-                : $"UPDATE [{Config.Database.SnapshotTableName}] SET [ETag]=@ETag, [Snapshot]=@Snapshot WHERE [Id]=@Id;";
+                ? $"INSERT INTO [{config.Database.SnapshotTableName}] ([Id], [ETag], [Snapshot]) VALUES (@Id, @ETag, @Snapshot);"
+                : $"UPDATE [{config.Database.SnapshotTableName}] SET [ETag]=@ETag, [Snapshot]=@Snapshot WHERE [Id]=@Id;";
             cmd.Parameters.AddWithValue("@Id", Id);
             cmd.Parameters.AddWithValue("@ETag", ETag);
             cmd.Parameters.AddWithValue("@Snapshot", serializedState);
             await cmd.ExecuteNonQueryAsync();
 
-            LastKnownShapshotETag = ETag;
-            LastSnapshotDuration.Restart();
+            lastKnownShapshotETag = ETag;
+            lastSnapshotDuration.Restart();
 
-            TryAddSnapshotProjectionHandlers();
+            projectionSnapshotFlag = true;
         }
 
         /// <summary>
-        /// If any domain event or snapshot handlers were enqueued, invoke them now then clear
-        /// the queue.
+        /// Calls the projection handler for this domain model (if any).
         /// </summary>
-        private void InvokeQueuedProjectionHandlers()
-        {
-            logger.LogDebug($"{nameof(InvokeQueuedProjectionHandlers)} ID {Id}");
-
-            var state = CopyState();
-
-            foreach (var handler in queuedProjections)
-                handler.Invoke(state);
-
-            queuedProjections.Clear();
-        }
+        private async Task InvokeProjections()
+            => await projectionHandlerService.InvokeProjections(domainModelState, projectionEventLog, projectionSnapshotFlag);
     }
 }
