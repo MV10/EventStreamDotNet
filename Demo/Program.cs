@@ -1,5 +1,6 @@
 ﻿
 using EventStreamDotNet;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using System;
@@ -29,20 +30,15 @@ namespace Demo
 
             try
             {
-
-                // ------------------ CONFIGURATION PROCESS
-
-
                 // Populate the EventStreamDotNet configuration classes from appsettings.json.
                 AppConfig.LoadConfiguration();
-
                 Console.WriteLine($"Database: {AppConfig.Get.EventStreamDotNet.Database.ConnectionString}");
                 Console.WriteLine($"Log Table: {AppConfig.Get.EventStreamDotNet.Database.EventTableName}");
                 Console.WriteLine($"Snapshot Table: {AppConfig.Get.EventStreamDotNet.Database.SnapshotTableName}");
 
+                // Optionally reset the database
                 Console.Write("\nDelete all records from the demo database (Y/N)? ");
                 var key = Console.ReadKey(true);
-
                 if(key.Key.Equals(ConsoleKey.Y))
                 {
                     Console.WriteLine("YES\n");
@@ -53,21 +49,63 @@ namespace Demo
                     Console.WriteLine("NO\n");
                 }
 
-                // This demo doesn't use dependency injection, so we'll use the library's helper class,
-                // which exposes services that a DI-based app would register and inject on demand. Then
-                // store our configuration associated with the domain model root, and register the domain
-                // event handler for our domain model.
-                var eventServices = new DirectDependencyServiceHost(loggerFactory);
-                eventServices.EventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
-                eventServices.DomainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
-                eventServices.ProjectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
+                // The demo will use the library's collection class to interact with the event stream. Declare
+                // it now because we'll obtain it differently depending on whether we use dependency injection.
+                EventStreamCollection<Customer> customerManagers;
 
-                
-                // ------------------ PREPARING TO RUN
+                // Optionally use dependency injection.
+                Console.Write("Use dependency injection (Y/N)? ");
+                key = Console.ReadKey(true);
+                if (key.Key.Equals(ConsoleKey.Y))
+                {
+                    Console.WriteLine("YES\n");
 
+                    // Create the library services
+                    var eventStreamConfigs = new EventStreamConfigService(loggerFactory);
+                    var domainEventHandlers = new DomainEventHandlerService(eventStreamConfigs);
+                    var projectionHandlers = new ProjectionHandlerService(eventStreamConfigs);
 
-                // Get a reference to the collection of domain object managers.
-                var customerManagers = new EventStreamCollection<Customer>(eventServices);
+                    // Register config and client app classes
+                    eventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
+                    domainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
+                    projectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
+
+                    // Register the services for DI
+                    var services = new ServiceCollection();
+                    services.AddSingleton(eventStreamConfigs);
+                    services.AddSingleton(domainEventHandlers);
+                    services.AddSingleton(projectionHandlers);
+
+                    // Register the domain model's event stream collection for DI
+                    services.AddSingleton<EventStreamCollection<Customer>>();
+
+                    // Create the DI service provider.
+                    var serviceProvider = services.BuildServiceProvider();
+
+                    // Because we're doing a simple console demo, only the library is using DI to
+                    // resolve references; we'll go ahead and do it the "anti-pattern" way for brevity.
+                    // However, this does actually use DI, the EventStreamCollection constructor has a
+                    // dependency on the three library services registered above, and of course, the
+                    // collection itself is registered as a singleton.
+                    customerManagers = serviceProvider.GetService<EventStreamCollection<Customer>>();
+                }
+                else
+                {
+                    Console.WriteLine("NO\n");
+
+                    // Create the non-DI helper object.
+                    var eventServices = new DirectDependencyServiceHost(loggerFactory);
+
+                    // Register config and client app classes
+                    eventServices.EventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
+                    eventServices.DomainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
+                    eventServices.ProjectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
+
+                    // Create the event stream collection.
+                    customerManagers = new EventStreamCollection<Customer>(eventServices);
+                }
+
+                // The rest of the demo works the same way with or without the use of dependency injection.
 
                 // This is just one possible usage pattern. The thinking here is that a CQRS service will
                 // execute commands against a collection of event streams tied to the same domain model, and
@@ -80,10 +118,6 @@ namespace Demo
 
                 var customerId = "12345678";
 
-
-                // ------------------ DEMO EXECUTION
-
-
                 // This is a simple select against the event stream to check whether the ID has ever been used.
                 var customerExists = await customerQueries.CustomerExists(customerId);
                 Console.WriteLine($"Customer id {customerId} exists? {customerExists.Output}");
@@ -92,7 +126,7 @@ namespace Demo
                 APIResult<Customer> result;
 
                 // Create or read the customer record
-                if(!customerExists.Output)
+                if (!customerExists.Output)
                 {
                     var residence = new Address
                     {
@@ -128,7 +162,7 @@ namespace Demo
 
                 // Add or remove a spouse
                 var customer = result.Output;
-                if(customer.Spouse == null)
+                if (customer.Spouse == null)
                 {
                     var spouse = new Person
                     {
