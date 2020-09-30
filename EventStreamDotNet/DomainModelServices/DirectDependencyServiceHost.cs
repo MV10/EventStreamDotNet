@@ -11,14 +11,24 @@ namespace EventStreamDotNet
     public class DirectDependencyServiceHost
     {
         /// <summary>
-        /// Constructor.
+        /// Constructor with optional lambda-style configuration.
         /// </summary>
         /// <param name="LoggerFactory">When set, the library will emit Debug-level log output to the configured logger.</param>
-        public DirectDependencyServiceHost(ILoggerFactory loggerFactory = null)
+        public DirectDependencyServiceHost(
+            ILoggerFactory loggerFactory = null,
+            Action<EventStreamConfigService> domainModelConfigs = null,
+            Action<DomainEventHandlerService> domainEventHandlers = null,
+            Action<ProjectionHandlerService> projectionHandlers = null)
         {
+            // Create the services
             EventStreamConfigs = new EventStreamConfigService(loggerFactory);
             DomainEventHandlers = new DomainEventHandlerService(EventStreamConfigs);
             ProjectionHandlers = new ProjectionHandlerService(EventStreamConfigs);
+
+            // Invoke the lambdas
+            domainModelConfigs?.Invoke(EventStreamConfigs);
+            domainEventHandlers?.Invoke(DomainEventHandlers);
+            projectionHandlers?.Invoke(ProjectionHandlers);
         }
 
         /// <summary>

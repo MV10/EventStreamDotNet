@@ -30,7 +30,8 @@ namespace Demo
 
             try
             {
-                // Populate the EventStreamDotNet configuration classes from appsettings.json.
+                // Populate the EventStreamDotNet configuration classes from appsettings.json. This could
+                // also populate any application-specific configuration systems using the same process.
                 AppConfig.LoadConfiguration();
                 Console.WriteLine($"Database: {AppConfig.Get.EventStreamDotNet.Database.ConnectionString}");
                 Console.WriteLine($"Log Table: {AppConfig.Get.EventStreamDotNet.Database.EventTableName}");
@@ -56,25 +57,28 @@ namespace Demo
                 // Optionally use dependency injection.
                 Console.Write("Use dependency injection (Y/N)? ");
                 key = Console.ReadKey(true);
+
+                // Using dependency injection
                 if (key.Key.Equals(ConsoleKey.Y))
                 {
                     Console.WriteLine("YES\n");
 
-                    // Create the library services
-                    var eventStreamConfigs = new EventStreamConfigService(loggerFactory);
-                    var domainEventHandlers = new DomainEventHandlerService(eventStreamConfigs);
-                    var projectionHandlers = new ProjectionHandlerService(eventStreamConfigs);
-
-                    // Register config and client app classes
-                    eventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
-                    domainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
-                    projectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
-
-                    // Register the services for DI
+                    // Configure and register the library services
                     var services = new ServiceCollection();
-                    services.AddSingleton(eventStreamConfigs);
-                    services.AddSingleton(domainEventHandlers);
-                    services.AddSingleton(projectionHandlers);
+                    services.AddEventStreamDotNet(
+                        loggerFactory: loggerFactory,
+                        domainModelConfigs: cfg =>
+                        {
+                            cfg.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
+                        },
+                        domainEventHandlers: cfg =>
+                        {
+                            cfg.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
+                        },
+                        projectionHandlers: cfg =>
+                        {
+                            cfg.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
+                        });
 
                     // Register the domain model's event stream collection for DI
                     services.AddSingleton<EventStreamCollection<Customer>>();
@@ -86,20 +90,30 @@ namespace Demo
                     // resolve references; we'll go ahead and do it the "anti-pattern" way for brevity.
                     // However, this does actually use DI, the EventStreamCollection constructor has a
                     // dependency on the three library services registered above, and of course, the
-                    // collection itself is registered as a singleton.
+                    // collection itself was just registered above as a singleton service.
                     customerManagers = serviceProvider.GetService<EventStreamCollection<Customer>>();
                 }
+                
+                // Not using dependency injection
                 else
                 {
                     Console.WriteLine("NO\n");
 
-                    // Create the non-DI helper object.
-                    var eventServices = new DirectDependencyServiceHost(loggerFactory);
-
-                    // Register config and client app classes
-                    eventServices.EventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
-                    eventServices.DomainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
-                    eventServices.ProjectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
+                    // Configure the library services
+                    var eventServices = new DirectDependencyServiceHost(
+                        loggerFactory: loggerFactory,
+                        domainModelConfigs: cfg =>
+                        {
+                            cfg.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
+                        },
+                        domainEventHandlers: cfg =>
+                        {
+                            cfg.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
+                        },
+                        projectionHandlers: cfg =>
+                        {
+                            cfg.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
+                        });
 
                     // Create the event stream collection.
                     customerManagers = new EventStreamCollection<Customer>(eventServices);

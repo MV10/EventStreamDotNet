@@ -32,11 +32,11 @@ Next we'll discuss how to register the domain event handler with the library.
 
 Three important library services are provided to manage domain-model-specific library configurations, domain event handlers, and projection handlers: `EventStreamConfigService`, `DomainEventHandlerService`, and `ProjectionHandlerService`. Even if your application only uses a single domain model, you must register your classes with these services. Projections are optional (although the service must still exist), but use of the config and event handler services is always required. The config service must be configured first because the other two services depend upon it.
 
-How you access the services, and how the library accesses them depends on whether you're using dependency injection (DI). The use of DI is completely optional. If you are using DI, create and configure each individual service object, register your classes as described below, then register them with the service container with a singleton scope. (Register the concrete instances, there are no separate interfaces.) If you are not using DI, create the `DirectDependencyServiceHost` object, then access the services through the three properties exposed by the host. You can see an example of the non-DI scenario in the repository's demo project. 
+How you access the services, and how the library accesses them depends on whether you're using dependency injection (DI). The use of DI is completely optional. If you are using DI, create and configure each individual service object, register your classes as described below, then register them with the service container with a singleton scope. (Register the concrete instances, there are no separate interfaces.) If you are not using DI, create the `DirectDependencyServiceHost` object, then access the services through the three properties exposed by the host.
 
 To register your classes with the services, first, call the `AddConfiguration` method on the `EventStreamConfigService` object. It requires you to identify the domain model root class and the populated library configuration data in an `EventStreamDotNetConfig` object. Next, call the `RegisterDomainEventHandler` method on the `DomainEventHandlerService` object. It requires you to identify the domain model root class and the domain event handler class.
 
-Refer to the repository's demo project for an example of the non-DI approach.
+Refer to the repository's demo project for an example of both DI and non-DI approaches.
 
 ### Decision: One or Many Domain Objects?
 

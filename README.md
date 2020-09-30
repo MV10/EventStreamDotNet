@@ -25,7 +25,6 @@ The client application is responsible for providing:
 Package dependencies:
 
 * JSON.Net
+* Microsoft.Extensions.DependencyInjection
 * Microsoft.Extensions.Logging
 * System.Data.SqlClient
-
-Optionally supports dependency-injection (no package dependencies required).
