@@ -18,7 +18,9 @@ namespace Demo
             // The library can optionally be configured with any implementation of the
             // standard Microsoft ILoggerFactory to enable debug-level log output from
             // the library. Here we're using Serilog but Microsoft's own basic logger
-            // or other libraries like NLog could be used.
+            // or other libraries like NLog could be used. Debug logging can generate
+            // significant amounts of log output, only enable it in the library if you
+            // absolutely need it.
             var loggerFactory = new LoggerFactory()
                 .AddSerilog(new LoggerConfiguration()
                     .MinimumLevel.Verbose()
@@ -51,19 +53,16 @@ namespace Demo
                     Console.WriteLine("NO\n");
                 }
 
-                // This can generate significant amounts of log output, only enable it
-                // if you really need to trace through the library calls and arguments.
-                AppConfig.Get.EventStreamDotNet.LoggerFactory = loggerFactory;
-
                 // This demo doesn't use dependency injection, so we'll use the library's helper class,
                 // which exposes services that a DI-based app would register and inject on demand. Then
                 // store our configuration associated with the domain model root, and register the domain
                 // event handler for our domain model.
-                var eventServices = new EventStreamServiceHost();
+                var eventServices = new DirectDependencyServiceHost(loggerFactory);
                 eventServices.EventStreamConfigs.AddConfiguration<Customer>(AppConfig.Get.EventStreamDotNet);
                 eventServices.DomainEventHandlers.RegisterDomainEventHandler<Customer, CustomerEventHandler>();
                 eventServices.ProjectionHandlers.RegisterProjectionHandler<Customer, CustomerProjectionHandler>();
 
+                
                 // ------------------ PREPARING TO RUN
 
 

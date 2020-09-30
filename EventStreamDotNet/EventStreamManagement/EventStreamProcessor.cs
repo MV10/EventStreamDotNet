@@ -66,7 +66,7 @@ namespace EventStreamDotNet
 
             IsInitialized = false;
             config = configService.GetConfiguration<TDomainModelRoot>();
-            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(config.LoggerFactory);
+            logger = new DebugLogger<EventStreamProcessor<TDomainModelRoot>>(configService.LoggerFactory);
 
             logger.LogDebug($"Created {nameof(EventStreamProcessor<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }

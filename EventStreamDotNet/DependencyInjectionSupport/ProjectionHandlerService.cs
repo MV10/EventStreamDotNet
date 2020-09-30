@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,11 +12,12 @@ namespace EventStreamDotNet
     /// <summary>
     /// Caches instances of projection handlers, and caches and invokes all of their handler methods. When used
     /// with dependency injection, register this as a Singleton scoped service. To use this without dependency
-    /// injection, reference the instance provided by an <see cref="EventStreamServiceHost"/> object.
+    /// injection, reference the instance provided by an <see cref="DirectDependencyServiceHost"/> object.
     /// </summary>
     public class ProjectionHandlerService
     {
         private readonly EventStreamConfigService configService;
+        private readonly DebugLogger<ProjectionHandlerService> logger;
 
         // Keyed on the domain model root
         private Dictionary<Type, HandlerItem> handlers = new Dictionary<Type, HandlerItem>();
@@ -27,6 +29,8 @@ namespace EventStreamDotNet
         public ProjectionHandlerService(EventStreamConfigService configService)
         {
             this.configService = configService;
+            logger = new DebugLogger<ProjectionHandlerService>(configService.LoggerFactory);
+            logger.LogDebug($"{nameof(ProjectionHandlerService)} is starting");
         }
 
         /// <summary>
@@ -43,15 +47,19 @@ namespace EventStreamDotNet
             if (handlers.ContainsKey(domainType)) return;
 
             // verify config exists for this domain model
-            if(!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
+            if(!configService.ContainsConfiguration<TDomainModelRoot>()) 
+                throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
+            
             var projectionConfig = configService.GetConfiguration<TDomainModelRoot>().Projection;
 
             // create an instance of the handler
             var handler = Activator.CreateInstance(typeof(TDomainModelProjectionHandler), projectionConfig) as IDomainModelProjectionHandler<TDomainModelRoot>;
+            var handlerType = handler.GetType();
+
+            logger.LogDebug($"Registering projection handler {handlerType.Name} for domain model {domainType.Name}");
 
             // prepare to store the handler
             var item = new HandlerItem { Handler = handler };
-            var handlerType = handler.GetType();
 
             // validate and catalog the projection methods
             var methods = handlerType.GetMethods();
@@ -62,25 +70,35 @@ namespace EventStreamDotNet
 
                 if(snapshotAttr != null || eventAttrs.Length > 0)
                 {
-                    if (method.GetParameters().Length != 0) throw new ArgumentException($"Projection handler {method.Name} is invalid: methods must not have arguments");
+                    if (method.GetParameters().Length != 0) 
+                        throw new ArgumentException($"Projection handler {method.Name} is invalid: methods must not have arguments");
 
                     if (!typeof(Task).IsAssignableFrom(method.ReturnType)
                         || (AsyncStateMachineAttribute)method.GetCustomAttribute(typeof(AsyncStateMachineAttribute)) == null) 
                         throw new ArgumentException($"Projection handler {method.Name} is invalid: methods must return an async Task");
 
                     // store snapshot handler
-                    if (snapshotAttr != null) item.SnapshotMethods.Add(method);
+                    if (snapshotAttr != null)
+                    {
+                        item.SnapshotMethods.Add(method);
+                        logger.LogDebug($"  Caching projection method {method.Name} for snapshot updates");
+                    }
 
                     // store domain event handlers
                     foreach(var domainEvent in eventAttrs)
                     {
-                        if (item.EventMethods.Any(e => e.DomainEvent.Equals(domainEvent.DomainEvent) && e.ProjectionMethod.Equals(method))) throw new ArgumentException($"Projection handler method {method.Name} declares domain event {domainEvent.DomainEvent.Name} more than once");
+                        if (item.EventMethods.Any(e => e.DomainEvent.Equals(domainEvent.DomainEvent) && e.ProjectionMethod.Equals(method))) 
+                            throw new ArgumentException($"Projection handler method {method.Name} declares domain event {domainEvent.DomainEvent.Name} more than once");
+
                         var tuple = (domainEvent.DomainEvent, method);
                         item.EventMethods.Add(tuple);
+                        logger.LogDebug($"  Caching projection method {method.Name} for domain event {domainEvent.DomainEvent.Name}");
                     }
                 }
             }
-            if (item.EventMethods.Count == 0 && item.SnapshotMethods.Count == 0) throw new ArgumentException($"No projection handler methods found for domain event handler {handlerType.Name}");
+
+            if (item.EventMethods.Count == 0 && item.SnapshotMethods.Count == 0) 
+                throw new ArgumentException($"No projection handler methods found for domain event handler {handlerType.Name}");
 
             // store the handler
             handlers.Add(domainType, item);

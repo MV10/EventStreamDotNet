@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 
@@ -7,12 +8,36 @@ namespace EventStreamDotNet
     /// <summary>
     /// Caches configuration data according to the domain data model related to the configuration. When used
     /// with dependency injection, register this as a Singleton scoped service. To use this without dependency
-    /// injection, reference the instance provided by an <see cref="EventStreamServiceHost"/> object.
+    /// injection, reference the instance provided by an <see cref="DirectDependencyServiceHost"/> object.
     /// </summary>
     public class EventStreamConfigService
     {
+        private readonly DebugLogger<EventStreamConfigService> logger;
+
         // Keyed on the domain model root type
         private Dictionary<Type, EventStreamDotNetConfig> cache = new Dictionary<Type, EventStreamDotNetConfig>();
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        public EventStreamConfigService()
+        { }
+
+        /// <summary>
+        /// Constructor for non-DI-based client applications.
+        /// </summary>
+        /// <param name="LoggerFactory">When set, the library will emit Debug-level log output to the configured logger.</param>
+        public EventStreamConfigService(ILoggerFactory loggerFactory = null)
+        {
+            LoggerFactory = loggerFactory;
+            logger = new DebugLogger<EventStreamConfigService>(loggerFactory);
+            logger.LogDebug($"{nameof(EventStreamConfigService)} is starting");
+        }
+
+        /// <summary>
+        /// When provided, the library will output debug messages to the configured logger.
+        /// </summary>
+        public ILoggerFactory LoggerFactory { get; }
 
         /// <summary>
         /// Adds a configuration object to the collection.
@@ -30,6 +55,8 @@ namespace EventStreamDotNet
             var domainType = typeof(TDomainModelRoot);
             if (cache.ContainsKey(domainType)) return;
             cache.Add(domainType, config);
+
+            logger.LogDebug($"Registering configuration for domain model {domainType.Name}");
         }
 
         /// <summary>

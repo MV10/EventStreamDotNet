@@ -44,7 +44,7 @@ namespace EventStreamDotNet
             queueSize = config.Policies.DefaultCollectionQueueSize;
             managers = new Dictionary<string, EventStreamManager<TDomainModelRoot>>(queueSize + 1);
             fifoQueue = new List<string>(queueSize + 1);
-            logger = new DebugLogger<EventStreamCollection<TDomainModelRoot>>(config.LoggerFactory);
+            logger = new DebugLogger<EventStreamCollection<TDomainModelRoot>>(configService.LoggerFactory);
 
             logger.LogDebug($"Created {nameof(EventStreamCollection<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
@@ -53,10 +53,14 @@ namespace EventStreamDotNet
         /// Constructor for non-DI-based client applications.
         /// </summary>
         /// <param name="serviceHost">An instance of the library's service host.</param>
-        public EventStreamCollection(EventStreamServiceHost serviceHost)
+        public EventStreamCollection(DirectDependencyServiceHost serviceHost)
             : this(serviceHost.EventStreamConfigs, serviceHost.DomainEventHandlers, serviceHost.ProjectionHandlers)
         { }
 
+        /// <summary>
+        /// Defines the maximum number of event stream managers this collection will store.
+        /// Adding a new manager will remove the oldest manager from the collection.
+        /// </summary>
         public int QueueSize 
         { 
             get => queueSize; 
@@ -68,6 +72,11 @@ namespace EventStreamDotNet
             }
         }
 
+        /// <summary>
+        /// Returns a manager instance for the requested ID. If the collection doesn't already hold a
+        /// reference to a manager with the ID, a new instance will be created.
+        /// </summary>
+        /// <param name="id">The unique identifier corresponding to the domain model object.</param>
         public async Task<EventStreamManager<TDomainModelRoot>> GetEventStreamManager(string id) 
         {
             logger.LogDebug($"{nameof(GetEventStreamManager)}({id})");
@@ -81,27 +90,63 @@ namespace EventStreamDotNet
             return mgr;
         }
 
+        /// <summary>
+        /// Indicates whether the collection holds a reference to a manager for the requested ID.
+        /// </summary>
+        /// <param name="id">The unique identifier corresponding to the domain model object.</param>
         public bool ContainsEventStreamManager(string id)
             => managers.ContainsKey(id);
 
+        /// <summary>
+        /// Removes the indicated manager from the collection.
+        /// </summary>
+        /// <param name="id">The unique identifier corresponding to the domain model object.</param>
         public void ReleaseEventStreamManager(string id)
             => managers.Remove(id);
 
+        /// <summary>
+        /// Returns a list of all the domain model object IDs currently in the collection.
+        /// </summary>
         public List<string> GetEventStreamIds()
             => new List<string>(fifoQueue);
 
+        /// <summary>
+        /// Returns a copy of the domain model object's state.
+        /// </summary>
+        /// <param name="id">The unique identifier corresponding to the domain model object.</param>
+        /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
         public async Task<TDomainModelRoot> GetCopyOfState(string id, bool forceRefresh = false)
         {
             var mgr = await GetEventStreamManager(id);
             return await mgr.GetCopyOfState(forceRefresh);
         }
 
+        /// <summary>
+        /// Stores a single domain event and applies it to the manager's copy of the domain model object's
+        /// state. Based on the configured policies and settings, this may also update the domain model's
+        /// snapshot and invoke projection handlers.
+        /// </summary>
+        /// <param name="id">The unique identifier corresponding to the domain model object.</param>
+        /// <param name="delta">The domain event to store and apply.</param>
+        /// <param name="onlyWhenCurrent">When true, ensures the last known ETag matches the highest stored ETag. (Some domain events are not
+        /// sensitive to this, such as a deposit transaction, while others are, such as a withdrawal that could be denied to avoid an overdraft.)</param>
+        /// <param name="doNotCopyState">When true, the CopyOfCurrentState value will be null. May improve performance if the caller doesn't immediately need new model state data.</param>
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(string id, DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false) 
         {
             var mgr = await GetEventStreamManager(id);
             return await mgr.PostDomainEvent(delta, onlyWhenCurrent, doNotCopyState);
         }
 
+        /// <summary>
+        /// Stores a list of domain events and applies them to the manager's copy of the domain model object's
+        /// state. Based on the configured policies and settings, this may also update the domain model's
+        /// snapshot and invoke projection handlers.
+        /// </summary>
+        /// <param name="id">The unique identifier corresponding to the domain model object.</param>
+        /// <param name="deltas">The domain events to store and apply.</param>
+        /// <param name="onlyWhenCurrent">When true, ensures the last known ETag matches the highest stored ETag. (Some domain events are not
+        /// sensitive to this, such as a deposit transaction, while others are, such as a withdrawal that could be denied to avoid an overdraft.)</param>
+        /// <param name="doNotCopyState">When true, the CopyOfCurrentState value will be null. May improve performance if the caller doesn't immediately need new model state data.</param>
         public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(string id, IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false) 
         {
             var mgr = await GetEventStreamManager(id);

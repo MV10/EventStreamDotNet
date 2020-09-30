@@ -1,16 +1,23 @@
 ﻿
+using Microsoft.Extensions.Logging;
+using System;
+
 namespace EventStreamDotNet
 {
     /// <summary>
     /// This class holds references to library services that would normally be registered for
     /// dependency injection. It is intended for use by client apps that are not DI-based.
     /// </summary>
-    public class EventStreamServiceHost
+    public class DirectDependencyServiceHost
     {
-        public EventStreamServiceHost()
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="LoggerFactory">When set, the library will emit Debug-level log output to the configured logger.</param>
+        public DirectDependencyServiceHost(ILoggerFactory loggerFactory = null)
         {
-            EventStreamConfigs = new EventStreamConfigService();
-            DomainEventHandlers = new DomainEventHandlerService();
+            EventStreamConfigs = new EventStreamConfigService(loggerFactory);
+            DomainEventHandlers = new DomainEventHandlerService(EventStreamConfigs);
             ProjectionHandlers = new ProjectionHandlerService(EventStreamConfigs);
         }
 
@@ -20,7 +27,8 @@ namespace EventStreamDotNet
         public EventStreamConfigService EventStreamConfigs { get; }
 
         /// <summary>
-        /// Caches instances of domain event handlers, and caches and invokes all of their Apply methods.
+        /// Caches instances of domain event handlers, and caches and invokes all of their Apply methods. Requires
+        /// configuration data, configure the <see cref="EventStreamConfigs"/> service before you configure this service.
         /// </summary>
         public DomainEventHandlerService DomainEventHandlers { get; }
 

@@ -1,4 +1,5 @@
 ﻿
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -8,12 +9,24 @@ namespace EventStreamDotNet
     /// <summary>
     /// Caches instances of domain event handlers, and caches and invokes all of their Apply methods. When used
     /// with dependency injection, register this as a Singleton scoped service. To use this without dependency
-    /// injection, reference the instance provided by an <see cref="EventStreamServiceHost"/> object.
+    /// injection, reference the instance provided by an <see cref="DirectDependencyServiceHost"/> object.
     /// </summary>
     public class DomainEventHandlerService
     {
+        private readonly DebugLogger<DomainEventHandlerService> logger;
+
         // Keyed on the domain model root
         private Dictionary<Type, HandlerItem> handlers = new Dictionary<Type, HandlerItem>();
+
+        /// <summary>
+        /// Constructor.
+        /// </summary>
+        /// <param name="configService">A collection of library configuration settings.</param>
+        public DomainEventHandlerService(EventStreamConfigService configService)
+        {
+            logger = new DebugLogger<DomainEventHandlerService>(configService.LoggerFactory);
+            logger.LogDebug($"{nameof(DomainEventHandlerService)} is starting");
+        }
 
         /// <summary>
         /// Adds a new domain event handler to the cache.
@@ -30,10 +43,12 @@ namespace EventStreamDotNet
 
             // create an instance of the handler
             var handler = Activator.CreateInstance(typeof(TDomainModelEventHandler)) as IDomainModelEventHandler<TDomainModelRoot>;
+            var handlerType = handler.GetType();
+
+            logger.LogDebug($"Registering domain event handler {handlerType.Name} for domain model {domainType.Name}");
 
             // prepare to store the handler
             var item = new HandlerItem { Handler = handler };
-            var handlerType = handler.GetType();
 
             // validate and catalog the Apply methods
             var methods = handlerType.GetMethods();
@@ -42,13 +57,19 @@ namespace EventStreamDotNet
                 if(method.Name == "Apply")
                 {
                     var parms = method.GetParameters();
-                    if (parms.Length != 1) throw new ArgumentException($"Invalid Apply method in domain event handler {handlerType.Name}: methods require exactly one argument");
+                    if (parms.Length != 1) 
+                        throw new ArgumentException($"Invalid Apply method in domain event handler {handlerType.Name}: methods require exactly one argument");
+
                     var type = parms[0].ParameterType;
-                    if (!typeof(DomainEventBase).IsAssignableFrom(type)) throw new ArgumentException($"Invalid Apply method in domain event handler {handlerType.Name}: argument must derive from {nameof(DomainEventBase)}");
+                    if (!typeof(DomainEventBase).IsAssignableFrom(type)) 
+                        throw new ArgumentException($"Invalid Apply method in domain event handler {handlerType.Name}: argument must derive from {nameof(DomainEventBase)}");
+                    
                     item.ApplyMethods.Add(type, method);
+                    logger.LogDebug($"  Caching Apply method for domain event {type.Name}");
                 }
             }
-            if (item.ApplyMethods.Count == 0) throw new ArgumentException($"No Apply methods found for domain event handler {handlerType.Name}");
+            if (item.ApplyMethods.Count == 0) 
+                throw new ArgumentException($"No Apply methods found for domain event handler {handlerType.Name}");
 
             // store the handler
             handlers.Add(domainType, item);
@@ -83,12 +104,14 @@ namespace EventStreamDotNet
             where TDomainModelRoot : class, IDomainModelRoot, new()
         {
             var domainType = typeof(TDomainModelRoot);
-            if (!handlers.ContainsKey(domainType)) throw new ArgumentException($"No domain event handler registered for domain model {domainType.Name}");
+            if (!handlers.ContainsKey(domainType)) 
+                throw new ArgumentException($"No domain event handler registered for domain model {domainType.Name}");
 
             var item = handlers[domainType];
             var handlerType = item.Handler.GetType();
             var eventType = loggedEvent.GetType();
-            if (!item.ApplyMethods.ContainsKey(eventType)) throw new ArgumentException($"Domain event handler {handlerType.Name} does not support domain event {eventType.Name}");
+            if (!item.ApplyMethods.ContainsKey(eventType)) 
+                throw new ArgumentException($"Domain event handler {handlerType.Name} does not support domain event {eventType.Name}");
 
             var method = item.ApplyMethods[eventType];
             var handler = item.Handler as IDomainModelEventHandler<TDomainModelRoot>;
@@ -96,6 +119,8 @@ namespace EventStreamDotNet
             handler.DomainModelState = modelState;
             method.Invoke(handler, new[] { loggedEvent });
             handler.DomainModelState = default; // null
+
+            logger.LogDebug($"Domain event handler {handlerType.Name} applied event {eventType.Name} to {domainType.Name} model state");
         }
 
         // Associates a domain event handler instance with a list of its Apply methods

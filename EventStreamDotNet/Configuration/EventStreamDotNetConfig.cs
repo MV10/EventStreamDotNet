@@ -22,10 +22,5 @@ namespace EventStreamDotNet
         /// Settings passed into projection handler constructors.
         /// </summary>
         public ProjectionConfig Projection { get; set; } = new ProjectionConfig();
-
-        /// <summary>
-        /// When set, the library will emit Debug-level log output to the configured logger.
-        /// </summary>
-        public ILoggerFactory LoggerFactory { get; set; }
     }
 }

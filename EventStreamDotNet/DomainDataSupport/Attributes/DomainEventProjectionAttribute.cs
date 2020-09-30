@@ -3,6 +3,11 @@ using System;
 
 namespace EventStreamDotNet
 {
+    /// <summary>
+    /// Indicates the projection method should be invoked when the indicated domain event is stored 
+    /// and applied. Multiple domain events can be identified for a single method. Can be combined
+    /// with the snapshot projection attribute.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public class DomainEventProjectionAttribute : Attribute
     {
