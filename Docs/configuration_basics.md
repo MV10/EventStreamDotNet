@@ -16,9 +16,8 @@ EventStreamDotNet
    |      |-- SnapshotInterval
    |      \-- DefaultCollectionQueueSize
    |
-   |-- ProjectionHandlers
-   |
-   \-- LoggerFactory
+   \-- Projection
+          \-- ConnectionString
 ```
 
 A typical `appsettings.json` configuration (taken from the demo project) looks like this:
@@ -34,6 +33,9 @@ A typical `appsettings.json` configuration (taken from the demo project) looks l
     "Policies": {
       "SnapshotFrequency": "AfterAllEvents",
       "DefaultCollectionQueueSize":  10
+    },
+    "Projection": {
+      "ConnectionString": "Server=(localdb)\\MSSQLLocalDB;Integrated Security=true;Database=EventStreamDotNet"
     }
   }
 }
@@ -64,26 +66,14 @@ THe _MEC_ package maps config sections to properties by name, so "EventStreamDot
 ```json
 {
   "CustomerEventStream": {
-    "Database": {
-      "ConnectionString": "Server=(localdb)\\MSSQLLocalDB;Integrated Security=true;Database=EventStreamDotNet",
-      "EventTableName": "CustomerDeltaLog",
-      "SnapshotTableName": "CustomerSnapshot"
-    },
-    "Policies": {
-      "SnapshotFrequency": "AfterAllEvents",
-      "DefaultCollectionQueueSize":  10
-    }
+    "Database": { ... },
+    "Policies": { ... },
+    "Projection": { ... }
   },
   "HumanResourcesEventStream": {
-    "Database": {
-      "ConnectionString": "Server=(localdb)\\MSSQLLocalDB;Integrated Security=true;Database=EventStreamDotNet",
-      "EventTableName": "HumanResourcesDeltaLog",
-      "SnapshotTableName": "HumanResourcesSnapshot"
-    },
-    "Policies": {
-      "SnapshotFrequency": "AfterIntervalSeconds",
-      "DefaultCollectionQueueSize":  30
-    }
+    "Database": { ... },
+    "Policies": { ... },
+    "Projection": { ... }
   }
 }
 ```

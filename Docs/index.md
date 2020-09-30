@@ -4,27 +4,27 @@ EventStreamDotNet is a simple, easy-to-use library that supports the Event Strea
 
 This is a completely separate stand-alone library, although you may be interested in my article about implementing a similar system using the Microsoft Orleans virtual actor model framework: [Event Sourcing with Orleans Journaled Grains](https://mcguirev10.com/2019/12/05/event-sourcing-with-orleans-journaled-grains.html).
 
-> **NOTE** The library was recently refactored to be dependency-injection friendly. The documentation has not been updated to reflect those changes yet. When in doubt, refer to the demo project until this notice is removed.
-
 #### General Information
 
-* [Architectural Patterns](patterns.md)
 * [Quick Start](quickstart.md)
 * [Configuration](configuration.md)
   * [The Basics](configuration_basics.md)
   * [Database](configuration_db.md)
   * [Policies](configuration_policies.md)
-  * [Projection Handlers](configuration_projections.md)
+  * [Projection](configuration_projections.md)
   * [Debug Logging](configuration_logging.md)
+* [Architectural Patterns](patterns.md)
 * Dependency Injection
-  * Using Dependency Injection
-  * Non-DI Client Applications
+  * Using With Dependency Injection
+  * Use Without Dependency Injection
   * ASP.NET DI Service Support
+* [Sample Demo Output](sampleoutput.md)
 
 #### Reference Material
 
 * Domain Data Model Support
 * Domain Event Support
+* Projection Support
 * Event Stream Manager
 * Event Stream Collection
 
