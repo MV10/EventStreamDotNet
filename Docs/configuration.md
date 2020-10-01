@@ -10,7 +10,6 @@ The library defines a set of configuration classes designed to be populated by t
 * [Database](configuration_db.md)
 * [Policies](configuration_policies.md)
 * [Projection Handlers](configuration_projections.md)
-* [Debug Logging](configuration_logging.md)
 
 ---
 

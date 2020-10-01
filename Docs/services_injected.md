@@ -11,8 +11,9 @@ services.AddEventStreamDotNet(
     loggerFactory: null, // no debug logging
     domainModelConfigs: cfg =>
     {
-        cfg.AddConfiguration<Customer>(AppConfig.Get.CustomerEventStream);
-        cfg.AddConfiguration<HumanResources>(AppConfig.Get.HumanResourcesEventStream);
+        // settings are instances of EventStreamDotNetConfig read from appsettings.json
+        cfg.AddConfiguration<Customer>(AppConfig.Get.CustomerModelSettings);
+        cfg.AddConfiguration<HumanResources>(AppConfig.Get.HumanResourcesModelSettings);
     },
     domainEventHandlers: cfg =>
     {

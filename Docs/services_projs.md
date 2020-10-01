@@ -1,4 +1,4 @@
-## Projection Handlers Service
+## "Projection Handlers" Service
 
 The `ProjectionHandlersService` manages projection handlers. Like all of the library services, this data is keyed on a domain data model root.
 

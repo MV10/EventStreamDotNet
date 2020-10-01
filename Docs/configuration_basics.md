@@ -61,16 +61,16 @@ public class AppConfig
 }
 ```
 
-THe _MEC_ package maps config sections to properties by name, so "EventStreamDotNet" in the JSON is matched up with the `AppConfig.EventStreamDotNet` property by the same name. This means you can reference multiple configuration blocks by customizing the top-level name and the properties in your config class:
+THe _MEC_ package maps config sections to properties by name, so "EventStreamDotNet" in the JSON is matched up with the `AppConfig.EventStreamDotNet` property by the same name. This means you can reference multiple configuration blocks by customizing the top-level name and the properties in your config class, and each configuration block can be named anything that makes sense in your system:
 
 ```json
 {
-  "CustomerEventStream": {
+  "CustomerModelSettings": {
     "Database": { ... },
     "Policies": { ... },
     "Projection": { ... }
   },
-  "HumanResourcesEventStream": {
+  "HumanResourcesModelSettings": {
     "Database": { ... },
     "Policies": { ... },
     "Projection": { ... }
@@ -88,11 +88,13 @@ public class AppConfig
     public static void LoadConfiguration()
     { ...omitted... }
 
-    public EventStreamDotNetConfig CustomerEventStream { get; set; }
+    public EventStreamDotNetConfig CustomerModelSettings { get; set; }
 
-    public EventStreamDotNetConfig HumanResourcesEventStream { get; set; }
+    public EventStreamDotNetConfig HumanResourcesModelSettings { get; set; }
 }
 ```
+
+The library will only care about the contents of those configuration objects, not what you named it or how it was populated.
 
 ---
 

@@ -1,4 +1,4 @@
-## Domain Model Configurations Service
+## "Domain Model Configurations" Service
 
 The `EventStreamConfigService` manages sets of configuration data (meaning the various settings which are typically read from a source like `appsettings.json`, as discussed in the [Configuration](configuration.md) topics). Like all of the library services, this data is keyed on a domain data model root.
 

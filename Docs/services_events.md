@@ -1,4 +1,4 @@
-## Domain Event Handlers Service
+## "Domain Event Handlers" Service
 
 The `DomainEventHandlersService` manages domain event handlers and their `Apply` methods. Like all of the library services, this data is keyed on a domain data model root.
 
