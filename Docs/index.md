@@ -12,21 +12,24 @@ This is a completely separate stand-alone library, although you may be intereste
   * [Database](configuration_db.md)
   * [Policies](configuration_policies.md)
   * [Projection](configuration_projections.md)
-  * [Debug Logging](configuration_logging.md)
 * [Architectural Patterns](patterns.md)
-* Dependency Injection
-  * Using With Dependency Injection
-  * Use Without Dependency Injection
-  * ASP.NET DI Service Support
+* [Library Services](services.md)
+  * [Domain Model Configurations Service](services_configs.md)
+  * [Domain Event Handlers Service](services_events.md)
+  * [Projection Handlers Service](services_projs.md)
+  * [Debug Logging](services_logging.md)
+  * [Configure With Dependency Injection](services_injected.md)
+  * [Configure Without Dependency Injection](services_direct.md)
 * [Sample Demo Output](sampleoutput.md)
 
 #### Reference Material
 
-* Domain Data Model Support
-* Domain Event Support
-* Projection Support
-* Event Stream Manager
-* Event Stream Collection
+* [Domain Data Model Support](ref_domaindatamodel.md)
+* [Domain Event Support](ref_domainevents.md)
+* [Projection Support](ref_projections.md)
+* [Event Stream Managers](ref_eventstreammanager.md)
+* [Event Stream Collections](ref_eventstreamcollection.md)
+* [Event Streams and Dependency Injection](ref_injection.md)
 
 ---
 
