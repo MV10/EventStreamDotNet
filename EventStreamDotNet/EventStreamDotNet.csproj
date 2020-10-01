@@ -2,6 +2,12 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Authors>Jon McGuire</Authors>
+    <Description>An easy-to-use library for Event Stream / Event Sourced storage of domain data models using change events (delta logging), snapshots, and projections (data extraction). Optionally supports dependency injection.</Description>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/MV10/EventStreamDotNet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MV10/EventStreamDotNet</RepositoryUrl>
+    <PackageTags>event stream, event sourcing, domain driven design</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -9,6 +15,13 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.5" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
