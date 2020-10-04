@@ -21,5 +21,17 @@ namespace EventStreamDotNet
         /// The default QueueSize for EventStreamCollections. Set zero to disable collection size limits.
         /// </summary>
         public int DefaultCollectionQueueSize { get; set; } = 0;
+
+        /// <summary>
+        /// Default setting for the forceRefresh argument on the GetCopyOfState method and the PostDomainEvent(s) methods.
+        /// If not configured, defaults to false.
+        /// </summary>
+        public bool DefaultForceRefresh { get; set; } = false;
+
+        /// <summary>
+        /// Default setting for the onlyWhenCurrent argument on the PostDomainEvent(s) methods.
+        /// If not configured, defaults to false.
+        /// </summary>
+        public bool DefaultPostOnlyWhenCurrent { get; set; } = false;
     }
 }

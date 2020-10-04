@@ -115,7 +115,7 @@ namespace EventStreamDotNet
         /// </summary>
         /// <param name="id">The unique identifier corresponding to the domain model object.</param>
         /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
-        public async Task<TDomainModelRoot> GetCopyOfState(string id, bool forceRefresh = false)
+        public async Task<TDomainModelRoot> GetCopyOfState(string id, bool? forceRefresh = null)
         {
             var mgr = await GetEventStreamManager(id);
             return await mgr.GetCopyOfState(forceRefresh);
@@ -131,10 +131,11 @@ namespace EventStreamDotNet
         /// <param name="onlyWhenCurrent">When true, ensures the last known ETag matches the highest stored ETag. (Some domain events are not
         /// sensitive to this, such as a deposit transaction, while others are, such as a withdrawal that could be denied to avoid an overdraft.)</param>
         /// <param name="doNotCopyState">When true, the CopyOfCurrentState value will be null. May improve performance if the caller doesn't immediately need new model state data.</param>
-        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(string id, DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false) 
+        /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
+        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(string id, DomainEventBase delta, bool? onlyWhenCurrent = null, bool doNotCopyState = false, bool? forceRefresh = null) 
         {
             var mgr = await GetEventStreamManager(id);
-            return await mgr.PostDomainEvent(delta, onlyWhenCurrent, doNotCopyState);
+            return await mgr.PostDomainEvent(delta, onlyWhenCurrent, doNotCopyState, forceRefresh);
         }
 
         /// <summary>
@@ -147,10 +148,11 @@ namespace EventStreamDotNet
         /// <param name="onlyWhenCurrent">When true, ensures the last known ETag matches the highest stored ETag. (Some domain events are not
         /// sensitive to this, such as a deposit transaction, while others are, such as a withdrawal that could be denied to avoid an overdraft.)</param>
         /// <param name="doNotCopyState">When true, the CopyOfCurrentState value will be null. May improve performance if the caller doesn't immediately need new model state data.</param>
-        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(string id, IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false) 
+        /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
+        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(string id, IReadOnlyList<DomainEventBase> deltas, bool? onlyWhenCurrent = null, bool doNotCopyState = false, bool? forceRefresh = null) 
         {
             var mgr = await GetEventStreamManager(id);
-            return await mgr.PostDomainEvents(deltas, onlyWhenCurrent, doNotCopyState);
+            return await mgr.PostDomainEvents(deltas, onlyWhenCurrent, doNotCopyState, forceRefresh);
         }
 
         /// <summary>

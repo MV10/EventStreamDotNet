@@ -22,7 +22,7 @@ Immediately after obtaining a reference to a manager object, you should await th
 
 This method returns a _copy_ of the current state of the domain model object. Generally this will be up to date except when another process may have written additional domain events under the same ID.
 
-The optional `bool forceRefresh` argument can be set to true to require the manager to check for and apply new events before returning the copy.
+The optional `bool forceRefresh` argument can be set to true to require the manager to check for and apply new events before returning the copy. The default value of this argument can be configured in the [policies](configuration_policies.md) section.
 
 As emphasized throughout the documentation, the application shouldn't modify the copy (it won't have any effect on the "real" model state, nor can a modified copy be saved in any library-compatible way), nor should the application hold a reference to the copy long-term. Instead, new copies should be obtained and used locally as needed. Copying is very fast (internally, JSON.NET serializes then deserializes the domain model to produce the stand-alone copy).
 
@@ -44,11 +44,13 @@ These methods are used to post one or more changes to the domain model state in 
 
 The methods return a `(bool Success, TDomainModelRoot CopyOfCurrentState)` tuple.
 
-An optional `bool onlyWhenCurrent` argument can be set true to require the manager to check for newer events that have been stored in the database (by another process, most likely) which have not been applied to the manager's current model state. If newer events are found, the call immediately exits with a false `Success` return value. You can force the manager to synchronize by calling `GetCopyOfState` with a true `forceRefresh` argument.
+An optional `bool onlyWhenCurrent` argument can be set true to require the manager to check for newer events that have been stored in the database (by another process, most likely) which have not been applied to the manager's current model state. If newer events are found, the call immediately exits with a false `Success` return value. You can force the manager to synchronize by setting the `forceRefresh` argument to true (see below).
 
-The `onlyWhenCurrent` flag is optional because some domain events are not sensitive to current state. For example, a banking application should always be able to store a deposit transaction, whereas a withdrawal transaction would be state-dependent since it should be blocked if the withdrawal would create an overdraft.
+The `onlyWhenCurrent` flag is optional because some domain events are not sensitive to current state. For example, a banking application should always be able to store a deposit transaction, whereas a withdrawal transaction would be state-dependent since it should be blocked if the withdrawal would create an overdraft.The default value of this argument can be configured in the [policies](configuration_policies.md) section.
 
 An optional `bool doNotCopyState` argument can be set to true to skip setting the `CopyOfCurrentState` return value (it will contain null). This is useful in high-volume batch-style processing and intermediate state changes are not of interest.
+
+The optional `bool forceRefresh` argument can be set to true to require the manager to check for and apply new events before returning the copy. The default value of this argument can be configured in the [policies](configuration_policies.md) section.
 
 This method also exists in the `EventStreamCollection` interface, but with a mandatory `string id` argument.
 

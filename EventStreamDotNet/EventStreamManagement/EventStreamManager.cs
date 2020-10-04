@@ -23,6 +23,7 @@ namespace EventStreamDotNet
         /// </summary>
         private List<DomainEventBase> singleEvent = new List<DomainEventBase>(1);
 
+        private readonly EventStreamDotNetConfig config;
         private readonly DebugLogger<EventStreamManager<TDomainModelRoot>> logger;
 
         /// <summary>
@@ -35,8 +36,10 @@ namespace EventStreamDotNet
         {
             if (!configService.ContainsConfiguration<TDomainModelRoot>()) throw new Exception($"No configuration registered for domain model {typeof(TDomainModelRoot).Name}");
 
-            eventStream = new EventStreamProcessor<TDomainModelRoot>(configService, eventHandlerService, projectionHandlerService);
             logger = new DebugLogger<EventStreamManager<TDomainModelRoot>>(configService.LoggerFactory);
+            config = configService.GetConfiguration<TDomainModelRoot>();
+
+            eventStream = new EventStreamProcessor<TDomainModelRoot>(configService, eventHandlerService, projectionHandlerService);
 
             logger.LogDebug($"Created {nameof(EventStreamManager<TDomainModelRoot>)} for domain model root {typeof(TDomainModelRoot).Name}");
         }
@@ -66,14 +69,15 @@ namespace EventStreamDotNet
         /// Returns a copy of the domain model object's state.
         /// </summary>
         /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
-        public async Task<TDomainModelRoot> GetCopyOfState(bool forceRefresh = false)
+        public async Task<TDomainModelRoot> GetCopyOfState(bool? forceRefresh = null)
         {
-            logger.LogDebug($"{nameof(GetCopyOfState)}({nameof(forceRefresh)}: {forceRefresh})");
+            var refresh = forceRefresh ?? config.Policies.DefaultForceRefresh;
+            logger.LogDebug($"{nameof(GetCopyOfState)}({nameof(forceRefresh)}: {refresh})");
 
             if (!eventStream.IsInitialized) 
                 throw new Exception("The EventStreamManager has not been initialized");
 
-            if (forceRefresh)
+            if (refresh)
             {
                 await eventStream.ReadAllEvents();
             }
@@ -90,7 +94,8 @@ namespace EventStreamDotNet
         /// <param name="onlyWhenCurrent">When true, ensures the last known ETag matches the highest stored ETag. (Some domain events are not
         /// sensitive to this, such as a deposit transaction, while others are, such as a withdrawal that could be denied to avoid an overdraft.)</param>
         /// <param name="doNotCopyState">When true, the CopyOfCurrentState value will be null. May improve performance if the caller doesn't immediately need new model state data.</param>
-        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(DomainEventBase delta, bool onlyWhenCurrent = false, bool doNotCopyState = false)
+        /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
+        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvent(DomainEventBase delta, bool? onlyWhenCurrent = null, bool doNotCopyState = false, bool? forceRefresh = null)
         {
             singleEvent.Clear();
             singleEvent.Add(delta);
@@ -106,11 +111,15 @@ namespace EventStreamDotNet
         /// <param name="onlyWhenCurrent">When true, ensures the last known ETag matches the highest stored ETag. (Some domain events are not
         /// sensitive to this, such as a deposit transaction, while others are, such as a withdrawal that could be denied to avoid an overdraft.)</param>
         /// <param name="doNotCopyState">When true, the CopyOfCurrentState value will be null. May improve performance if the caller doesn't immediately need new model state data.</param>
-        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(IReadOnlyList<DomainEventBase> deltas, bool onlyWhenCurrent = false, bool doNotCopyState = false)
+        /// <param name="forceRefresh">When true, any new domain events in the database will be applied to the manager's copy of the domain model object's state.</param>
+        public async Task<(bool Success, TDomainModelRoot CopyOfCurrentState)> PostDomainEvents(IReadOnlyList<DomainEventBase> deltas, bool? onlyWhenCurrent = null, bool doNotCopyState = false, bool? forceRefresh = null)
         {
-            if(logger.Available)
+            var refresh = forceRefresh ?? config.Policies.DefaultForceRefresh;
+            var whenCurrent = onlyWhenCurrent ?? config.Policies.DefaultPostOnlyWhenCurrent;
+
+            if (logger.Available)
             {
-                logger.LogDebug($"{nameof(PostDomainEvents)}({nameof(deltas)}: {deltas.Count}, {nameof(onlyWhenCurrent)}: {onlyWhenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState})");
+                logger.LogDebug($"{nameof(PostDomainEvents)}({nameof(deltas)}: {deltas.Count}, {nameof(onlyWhenCurrent)}: {whenCurrent}, {nameof(doNotCopyState)}: {doNotCopyState}, {nameof(forceRefresh)}: {refresh})");
                 foreach (var d in deltas)
                     logger.LogDebug($"  Posting domain event: {d.GetType().Name}");
             }
@@ -118,7 +127,12 @@ namespace EventStreamDotNet
             if (!eventStream.IsInitialized) 
                 throw new Exception("The EventStreamManager has not been initialized");
 
-            var success = await eventStream.WriteEvents(deltas, onlyWhenCurrent);
+            if (refresh)
+            {
+                await eventStream.ReadAllEvents();
+            }
+
+            var success = await eventStream.WriteEvents(deltas, whenCurrent);
             var state = doNotCopyState ? null : eventStream.CopyState();
 
             return (success, state);

@@ -31,4 +31,16 @@ This integer setting is only used when `SnapshotFrequency` is set to either `Aft
 
 ---
 
+#### `DefaultForceRefresh`
+
+When set to true, reading the model state or posting new domain events will first update the model with any newer events not already applied (which may have been written by some other process, for example). This is only the default value, the application can still control the value of the `forceRefresh` argument on individual method calls. Defaults to false if not configured. Refer to the [`EventStreamManager` docs](ref_eventstreammanager.md) for details.
+
+---
+
+#### `DefaultPostOnlyWhenCurrent`
+
+When set to true, new domain events will only be posted if the manager's model state is up-to-date with all events. This is only the default value, the application can still control the value of the `forceRefresh` argument on individual method calls. Defaults to false if not configured. Refer to the [`EventStreamManager` docs](ref_eventstreammanager.md) for details.
+
+---
+
 [Return to the Configuration topic](configuration.md)
