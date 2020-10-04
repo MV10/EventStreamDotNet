@@ -31,6 +31,11 @@ This is a completely separate stand-alone library, although you may be intereste
 * [Event Stream Collections](ref_eventstreamcollection.md)
 * [Event Streams and Dependency Injection](ref_injection.md)
 
+#### Version History
+
+* [v1.1.0](v1.1.0.md) in dev
+* v1.0.0 released 2020-10-01
+
 ---
 
 [Return to the repository](https://github.com/MV10/EventStreamDotNet)
